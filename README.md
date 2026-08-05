@@ -68,6 +68,7 @@ npm start -- -p 3100  # http://localhost:3100
 | `OPENAI_API_KEY`  | Key for hosted providers (Ollama ignores it)     | `ollama` |
 | `AI_MODEL`     | Model name used by the advisor                      | `llama3.1` |
 | `AI_TIMEOUT_MS`| LLM request timeout before deterministic fallback   | `8000` |
+| `AI_PROBE_TIMEOUT_MS` | Reachability probe timeout before attempting the LLM | `2000` |
 | `SMTP_HOST`    | SMTP server (empty = print to console in dev)       | —       |
 | `SMTP_PORT`    | SMTP port (465 + `SMTP_SECURE=true` for SSL)        | `587`   |
 | `SMTP_USER` / `SMTP_PASS` | SMTP credentials                        | —       |
@@ -84,6 +85,25 @@ ollama pull llama3.1
 ```
 
 The advisor will use the LLM automatically. If Ollama is stopped or the model is missing, the deterministic analytics engine answers instead — no error to the user.
+
+### Using a hosted LLM (Google Gemini — free tier)
+
+The advisor is wired to any OpenAI-compatible endpoint, so Google Gemini works with zero code changes:
+
+1. Get a free API key (no credit card) at **https://aistudio.google.com/apikey**
+2. Set three variables in `.env`:
+
+```
+OPENAI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai/"
+OPENAI_API_KEY="YOUR_GEMINI_API_KEY"
+AI_MODEL="gemini-3.6-flash"
+```
+
+> Model availability changes; older models (e.g. `gemini-2.5-flash`) may be blocked for new keys. If you get a `404 model not available` error, list the current models (`GET $OPENAI_BASE_URL/models` with your key) and set `AI_MODEL` to the newest `*-flash` model listed.
+
+3. Restart the server. The advisor now answers via Gemini and still falls back to the deterministic engine if the key is invalid or the API is unreachable.
+
+Other OpenAI-compatible providers (OpenAI, Groq, Mistral, OpenRouter, local Ollama) work the same way — just point `OPENAI_BASE_URL` / `OPENAI_API_KEY` / `AI_MODEL` at them.
 
 ### Sending real email
 

@@ -18,16 +18,52 @@ import type { AdvisorAnswer } from "@/server/ai/advisor";
 export const OLLAMA_BASE_URL = "http://localhost:11434/v1";
 
 export function llmConfig() {
+  const rawBase = process.env.OPENAI_BASE_URL || OLLAMA_BASE_URL;
   return {
-    baseUrl: process.env.OPENAI_BASE_URL || OLLAMA_BASE_URL,
+    baseUrl: rawBase.replace(/\/+$/, ""),
     apiKey: process.env.OPENAI_API_KEY || "ollama",
     model: process.env.AI_MODEL || "llama3.1",
     timeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 8000),
+    probeTimeoutMs: Number(process.env.AI_PROBE_TIMEOUT_MS ?? 2000),
   };
 }
 
 export function isLLMConfigured(): boolean {
   return Boolean(process.env.OPENAI_BASE_URL || process.env.OPENAI_API_KEY || process.env.AI_MODEL || process.env.OLLAMA_HOST);
+}
+
+/**
+ * Cheap reachability probe. Some networks (or firewalls) blackhole the local
+ * Ollama port instead of refusing it, so a plain chat call would hang until the
+ * full timeout. Probing /models with a short timeout makes the deterministic
+ * fallback kick in fast when the LLM is offline.
+ *
+ * Any HTTP response (even 404/401) counts as "reachable" — some OpenAI-compatible
+ * providers (e.g. Google Gemini) may not implement GET /models; the actual chat
+ * call is what decides success.
+ *
+ * The result is cached for a short TTL so an offline LLM only costs one probe
+ * every 30s instead of paying the timeout on every message.
+ */
+const PROBE_TTL_MS = 30_000;
+let lastProbe: { ok: boolean; at: number } | null = null;
+
+export async function isLlmReachable(): Promise<boolean> {
+  if (!isLLMConfigured()) return false;
+  if (lastProbe && Date.now() - lastProbe.at < PROBE_TTL_MS) return lastProbe.ok;
+
+  const { baseUrl, apiKey, probeTimeoutMs } = llmConfig();
+  try {
+    await fetch(`${baseUrl}/models`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(probeTimeoutMs),
+    });
+    lastProbe = { ok: true, at: Date.now() };
+    return true;
+  } catch {
+    lastProbe = { ok: false, at: Date.now() };
+    return false;
+  }
 }
 
 async function buildSnapshot(companyId: string, range: DateRange, currency: string): Promise<string> {
@@ -84,6 +120,35 @@ function systemPrompt(locale: Locale): string {
   ].join(" ");
 }
 
+async function chatCompletion(system: string, user: string, locale: Locale, opts?: { maxTokens?: number; timeoutMs?: number }): Promise<string | null> {
+  if (!(await isLlmReachable())) return null;
+  const { baseUrl, apiKey, model, timeoutMs } = llmConfig();
+  try {
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        temperature: 0.2,
+        max_tokens: opts?.maxTokens ?? 1000,
+      }),
+      signal: AbortSignal.timeout(opts?.timeoutMs ?? timeoutMs),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Ask a local LLM (Ollama or any OpenAI-compatible endpoint) for an advisor
  * answer. Returns null when the endpoint is unreachable, the model is missing,
@@ -97,40 +162,35 @@ export async function tryLlmAnswer(
   locale: Locale,
   question: string,
 ): Promise<AdvisorAnswer | null> {
-  if (!isLLMConfigured()) return null;
-
-  const { baseUrl, apiKey, model, timeoutMs } = llmConfig();
   const snapshot = await buildSnapshot(companyId, range, currency);
+  const content = await chatCompletion(
+    systemPrompt(locale),
+    `Business snapshot:\n${snapshot}\n\nUser question: ${question}`,
+    locale,
+  );
+  if (!content) return null;
+  return { answer: content, bullets: [], tone: "info" };
+}
 
-  try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt(locale) },
-          {
-            role: "user",
-            content: `Business snapshot:\n${snapshot}\n\nUser question: ${question}`,
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 300,
-      }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!res.ok) return null;
+function fileSystemPrompt(locale: Locale): string {
+  const lang = locale === "ar" ? "Arabic" : "English";
+  return [
+    "You are a data analyst. You receive a compact digest of an uploaded spreadsheet (columns, types, statistics and a preview of the rows).",
+    `Always respond in ${lang}.`,
+    "Describe what this data looks like, the most notable patterns or problems (empty cells, anomalies, totals, date ranges), and 2-4 practical suggestions.",
+    "Be concise: 4-8 sentences. Do NOT invent numbers that are not in the digest.",
+  ].join(" ");
+}
 
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const content = data.choices?.[0]?.message?.content?.trim();
-    if (!content) return null;
-
-    return { answer: content, bullets: [], tone: "info" };
-  } catch {
-    return null;
-  }
+/**
+ * Narrative analysis of an uploaded file. Returns null when the LLM is not
+ * reachable — callers should fall back to the deterministic narrative.
+ */
+export async function tryLlmFileAnalysis(locale: Locale, digest: string): Promise<string | null> {
+  return chatCompletion(
+    fileSystemPrompt(locale),
+    `Spreadsheet digest:\n${digest}`,
+    locale,
+    { maxTokens: 2048, timeoutMs: 25000 },
+  );
 }

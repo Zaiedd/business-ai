@@ -1,4 +1,4 @@
-import { LayoutDashboard, Activity, Users, Settings, Bot, BarChart3, Package, UsersRound, FileText } from "lucide-react";
+import { LayoutDashboard, Activity, Users, Settings, Bot, BarChart3, Package, UsersRound, FileText, FileSearch } from "lucide-react";
 import type { Role } from "@prisma/client";
 import { ALL_ROLES } from "@/lib/rbac";
 
@@ -16,6 +16,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/inventory", labelKey: "nav.inventory", icon: Package, roles: ALL_ROLES },
   { href: "/customers", labelKey: "nav.customers", icon: UsersRound, roles: ALL_ROLES },
   { href: "/reports", labelKey: "nav.reports", icon: FileText, roles: ALL_ROLES },
+  { href: "/analyzer", labelKey: "nav.analyzer", icon: FileSearch, roles: ALL_ROLES },
   { href: "/activity", labelKey: "nav.activity", icon: Activity, roles: ["OWNER", "ADMIN"] },
   { href: "/team", labelKey: "nav.team", icon: Users, roles: ["OWNER", "ADMIN"] },
   { href: "/settings", labelKey: "nav.settings", icon: Settings, roles: ["OWNER", "ADMIN"] },
