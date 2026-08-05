@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-cairo: var(--font-cairo), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+html[lang="ar"] {
+  font-family: var(--font-cairo), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html[lang="ar"] body {
+  letter-spacing: 0 !important;
+}
+
+html[lang="ar"] .tracking-widest,
+html[lang="ar"] .tracking-wide,
+html[lang="ar"] .uppercase {
+  letter-spacing: 0 !important;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+}
+
+/* Smooth theme transition for supported browsers */
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 150ms ease;
+}
+
+/* Slim, unobtrusive scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300 dark:bg-slate-700;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Recharts: force crisp text in dark mode */
+:root {
+  --chart-grid: #e2e8f0;
+  --chart-tick: #64748b;
+  --chart-tick-strong: #475569;
+  --color-tooltip-bg: #ffffff;
+}
+.dark {
+  --chart-grid: #334155;
+  --chart-tick: #94a3b8;
+  --chart-tick-strong: #cbd5e1;
+  --color-tooltip-bg: #0f172a;
+}
+.dark .recharts-text {
+  fill: #94a3b8;
+}
+.dark .recharts-tooltip-wrapper {
+  filter: none;
+}
