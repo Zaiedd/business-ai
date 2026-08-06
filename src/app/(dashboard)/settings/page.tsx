@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/components/i18n-provider";
+import CompanyFiles from "@/components/settings/company-files";
 
 interface Company {
   id: string;
@@ -208,6 +209,8 @@ export default function SettingsPage() {
           </ul>
         </CardBody>
       </Card>
+
+      <CompanyFiles />
     </div>
   );
 }

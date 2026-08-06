@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import type { Locale } from "@/lib/i18n";
 import { serverT } from "@/lib/i18n/server";
+import { tryLlmFileAnalysis } from "@/server/ai/llm";
 
 export const MAX_FILE_BYTES = 15 * 1024 * 1024;
 export const MAX_STATS_ROWS = 20_000;
@@ -199,4 +200,27 @@ export function buildFileDigest(a: { sheetName: string; rows: number; columns: C
   lines.push("Preview rows:");
   for (const r of a.preview.slice(0, 6)) lines.push("| " + r.join(" | "));
   return lines.join("\n");
+}
+
+export interface AnalyzedData {
+  narrative: string;
+  bullets: string[];
+  engine: "llm" | "rules";
+}
+
+export async function analyzeFileData(buf: Buffer, ext: string, locale: Locale): Promise<AnalyzedData | null> {
+  try {
+    const { sheetName, rows } = parseRows(buf, ext);
+    if (rows.length < 2) return null;
+    const { columns, preview, rowsCount } = analyzeRows(rows);
+    const summary = { rows: rowsCount, cols: columns.length, sheetName, columns };
+    const rules = rulesNarrative(summary, locale);
+    const digest = buildFileDigest({ sheetName, rows: rowsCount, columns, preview });
+    const llm = await tryLlmFileAnalysis(locale, digest);
+    return llm
+      ? { narrative: llm, bullets: [], engine: "llm" }
+      : { narrative: rules.narrative, bullets: rules.bullets, engine: "rules" };
+  } catch {
+    return null;
+  }
 }

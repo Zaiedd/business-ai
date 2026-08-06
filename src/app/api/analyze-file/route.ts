@@ -1,15 +1,13 @@
 import type { NextRequest } from "next/server";
 import { apiError, apiOk, requireSession, runApi } from "@/lib/api";
 import { getLocaleFromRequest, serverT } from "@/lib/i18n/server";
-import { tryLlmFileAnalysis } from "@/server/ai/llm";
 import {
   MAX_FILE_BYTES,
+  analyzeFileData,
   analyzeRows,
-  buildFileDigest,
   fileExt,
   isSupportedExt,
   parseRows,
-  rulesNarrative,
 } from "@/server/file-analyzer";
 
 export async function POST(req: NextRequest) {
@@ -43,10 +41,7 @@ export async function POST(req: NextRequest) {
     if (parsed.rows.length < 2) return apiError(t("api.emptyFile"), 400);
 
     const { columns, preview, rowsCount } = analyzeRows(parsed.rows);
-    const summary = { rows: rowsCount, cols: columns.length, sheetName: parsed.sheetName, columns };
-    const rules = rulesNarrative(summary, locale);
-    const digest = buildFileDigest({ sheetName: parsed.sheetName, rows: rowsCount, columns, preview });
-    const llmNarrative = await tryLlmFileAnalysis(locale, digest);
+    const analyzed = await analyzeFileData(Buffer.from(await file.arrayBuffer()), ext, locale);
 
     return apiOk({
       fileName: file.name,
@@ -56,9 +51,9 @@ export async function POST(req: NextRequest) {
       cols: columns.length,
       columns,
       preview,
-      narrative: llmNarrative ?? rules.narrative,
-      bullets: llmNarrative ? [] : rules.bullets,
-      engine: llmNarrative ? "llm" : "rules",
+      narrative: analyzed?.narrative ?? "",
+      bullets: analyzed?.bullets ?? [],
+      engine: analyzed?.engine ?? "rules",
     });
   }, locale);
 }

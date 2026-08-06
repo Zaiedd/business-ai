@@ -1,6 +1,8 @@
 import type { Locale } from "@/lib/i18n";
 import { formatCurrency } from "@/lib/utils";
 import type { DateRange } from "@/lib/validators";
+import { prisma } from "@/lib/db";
+import { formatFileSize } from "@/server/company-files";
 import {
   computeHealthScore,
   getAtRiskCustomers,
@@ -68,7 +70,7 @@ export async function isLlmReachable(): Promise<boolean> {
 
 async function buildSnapshot(companyId: string, range: DateRange, currency: string): Promise<string> {
   const { from, to, prevFrom, prevTo } = rangeToBounds(range);
-  const [cur, prev, products, branches, employees, expenses, stock, atRisk, customerStats] = await Promise.all([
+  const [cur, prev, products, branches, employees, expenses, stock, atRisk, customerStats, companyFiles] = await Promise.all([
     getPeriodTotals(companyId, from, to),
     getPeriodTotals(companyId, prevFrom, prevTo),
     getTopProducts(companyId, from, to, 3),
@@ -78,6 +80,12 @@ async function buildSnapshot(companyId: string, range: DateRange, currency: stri
     getStockStatus(companyId),
     getAtRiskCustomers(companyId, 45, 3),
     getCustomerStats(companyId, from, to),
+    prisma.companyFile.findMany({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+      take: 3,
+      select: { originalName: true, ext: true, size: true, analysis: true, createdAt: true },
+    }),
   ]);
 
   const fmt = (v: number) => formatCurrency(v, currency);
@@ -106,6 +114,11 @@ async function buildSnapshot(companyId: string, range: DateRange, currency: stri
       : "Top expense categories: none",
     stock.low.length ? `Low stock items: ${stock.low.map((p) => p.name).join(", ")}` : "Low stock items: none",
     `Active customers: ${customerStats.activeCustomers}, repeat rate: ${customerStats.repeatRate.toFixed(0)}%, at-risk: ${atRisk.length}`,
+    companyFiles.length
+      ? `Uploaded files (${companyFiles.length} most recent): ${companyFiles
+          .map((f) => `${f.originalName} (${formatFileSize(f.size)})${f.analysis ? ` — analysis: ${f.analysis.split("\n").join(" ").slice(0, 300)}` : " — no analysis"}`)
+          .join(" | ")}`
+      : "Uploaded files: none",
   ].join("\n");
 }
 

@@ -38,6 +38,7 @@ model Company {
   sales     Sale[]
   expenses  Expense[]
   auditLogs AuditLog[]
+  files     CompanyFile[]
 }
 
 model User {
@@ -64,6 +65,7 @@ model User {
   verifications VerificationToken[]
   sales       Sale[]
   auditLogs   AuditLog[]
+  files       CompanyFile[]
 
   @@unique([companyId, email])
   @@index([email])
@@ -220,6 +222,24 @@ model AuditLog {
   userId    String?
   user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+}
+
+model CompanyFile {
+  id           String   @id @default(cuid())
+  originalName String
+  storedName   String   @unique
+  mimeType     String
+  ext          String
+  size         Int
+  analysis     String?
+  createdAt    DateTime @default(now())
+
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
 
   @@index([companyId, createdAt])
 }
