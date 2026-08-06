@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { AlertCircle, ArrowRight, FileSearch, Loader2, Sparkles, UploadCloud } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, FileSearch, Loader2, Sparkles, UploadCloud } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -22,14 +22,17 @@ interface ColumnStats {
 interface AnalysisResult {
   fileName: string;
   size: number;
-  sheetName: string;
+  sheetName: string | null;
   rows: number;
   cols: number;
   columns: ColumnStats[];
   preview: string[][];
   narrative: string;
   bullets: string[];
-  engine: "llm" | "rules";
+  engine: "llm" | "rules" | "none";
+  saved: boolean;
+  savedFileId: string;
+  analyzable: boolean;
 }
 
 const TYPE_KEYS = { number: "analyzer.typeNumber", date: "analyzer.typeDate", boolean: "analyzer.typeBoolean", text: "analyzer.typeText" } as const;
@@ -121,11 +124,10 @@ export default function AnalyzerPage() {
                 </button>
               </div>
               <p className="text-xs text-slate-400 dark:text-slate-500">{t("analyzer.acceptedTypes")}</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">{t("analyzer.sizeHint", { rows: "20000" })}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">{t("analyzer.sizeHint", { max: "25", rows: "20000" })}</p>
               <input
                 ref={inputRef}
                 type="file"
-                accept=".xlsx,.xls,.csv,.tsv,.txt,.json"
                 className="hidden"
                 onChange={(e) => {
                   onFiles(e.target.files);
@@ -173,28 +175,47 @@ export default function AnalyzerPage() {
                 </Button>
               }
             />
-            <CardBody className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                <p className="text-xs text-slate-500 dark:text-slate-400">{t("analyzer.sheet")}</p>
-                <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{result.sheetName}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                <p className="text-xs text-slate-500 dark:text-slate-400">{t("analyzer.rows")}</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatNumber(result.rows)}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                <p className="text-xs text-slate-500 dark:text-slate-400">{t("analyzer.cols")}</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatNumber(result.cols)}</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                <p className="text-xs text-slate-500 dark:text-slate-400">{t("analyzer.analysisTitle")}</p>
-                <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                  {result.engine === "llm" ? t("analyzer.engineLlm") : t("analyzer.engineRules")}
-                </p>
-              </div>
+            <CardBody className="space-y-3">
+              {result.saved && (
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  <CheckCircle2 className="size-4 shrink-0" />
+                  <span>{t("analyzer.savedNotice")}</span>
+                  <a href="/settings" className="ms-auto font-medium underline underline-offset-2">
+                    {t("analyzer.viewCompanyFiles")}
+                  </a>
+                </div>
+              )}
+              {result.analyzable ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t("analyzer.sheet")}</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{result.sheetName}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t("analyzer.rows")}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatNumber(result.rows)}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t("analyzer.cols")}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatNumber(result.cols)}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t("analyzer.analysisTitle")}</p>
+                    <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                      {result.engine === "llm" ? t("analyzer.engineLlm") : t("analyzer.engineRules")}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                  <p className="text-sm text-slate-600 dark:text-slate-300">{t("analyzer.notAnalyzable")}</p>
+                </div>
+              )}
             </CardBody>
           </Card>
 
+          {result.analyzable && (
+            <>
           <Card>
             <CardHeader title={t("analyzer.analysisTitle")} />
             <CardBody>
@@ -280,6 +301,8 @@ export default function AnalyzerPage() {
               </div>
             </CardBody>
           </Card>
+            </>
+          )}
         </>
       )}
     </div>

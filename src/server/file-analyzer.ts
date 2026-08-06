@@ -2,8 +2,8 @@ import * as XLSX from "xlsx";
 import type { Locale } from "@/lib/i18n";
 import { serverT } from "@/lib/i18n/server";
 import { tryLlmFileAnalysis } from "@/server/ai/llm";
+import { MAX_FILE_BYTES } from "@/server/company-files";
 
-export const MAX_FILE_BYTES = 15 * 1024 * 1024;
 export const MAX_STATS_ROWS = 20_000;
 export const PREVIEW_ROWS = 8;
 export const SUPPORTED_EXTS = ["xlsx", "xls", "csv", "tsv", "txt", "json"] as const;
