@@ -1,4 +1,4 @@
-# dependencies
+﻿# dependencies
 /node_modules
 
 # next.js
@@ -30,3 +30,15 @@ next-env.d.ts
 
 # uploaded files
 /uploads/
+.vercel
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+
+
+# stray empty screenshots

@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/components/i18n-provider";
+import { useToast } from "@/components/ui/toast";
 import CompanyFiles from "@/components/settings/company-files";
 
 interface Company {
@@ -22,7 +23,8 @@ interface Company {
 interface Branch { id: string; name: string; address: string | null; city: string | null }
 
 export default function SettingsPage() {
-  const { t } = useI18n();
+  const { toast } = useToast();
+  const { t, locale } = useI18n();
   const [company, setCompany] = useState<Company | null>(null);
   const [stats, setStats] = useState<{ users: number; branches: number; products: number; customers: number } | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -108,10 +110,11 @@ export default function SettingsPage() {
   }
 
   async function deleteBranch(id: string) {
+    if (!window.confirm(t("common.confirmDelete"))) return;
     const res = await fetch(`/api/settings/branches?id=${id}`, { method: "DELETE" });
     const body = await res.json();
     if (!res.ok) {
-      alert(body.error ?? t("settings.deleteFailed"));
+      toast(body.error ?? t("settings.deleteFailed"), "error");
       return;
     }
     load();
@@ -135,9 +138,14 @@ export default function SettingsPage() {
 
       {error && (
         <Card className="border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/40">
-          <CardBody className="flex items-center gap-2 text-sm text-rose-700 dark:text-rose-300">
-            <AlertCircle className="size-4" />
-            {error}
+          <CardBody className="flex items-center justify-between gap-2 text-sm text-rose-700 dark:text-rose-300">
+            <span className="flex items-center gap-2">
+              <AlertCircle className="size-4" />
+              {error}
+            </span>
+            <Button variant="danger" size="sm" onClick={load}>
+              {t("common.retry")}
+            </Button>
           </CardBody>
         </Card>
       )}
@@ -175,7 +183,7 @@ export default function SettingsPage() {
         ].map((s) => (
           <Card key={s.label}>
             <CardBody className="text-center">
-              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatNumber(s.value)}</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatNumber(s.value, 0, locale)}</p>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{s.label}</p>
             </CardBody>
           </Card>

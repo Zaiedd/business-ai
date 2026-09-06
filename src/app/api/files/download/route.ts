@@ -1,9 +1,10 @@
-import { promises as fs } from "fs";
 import type { NextRequest } from "next/server";
+import { eq, and } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { companyFile } from "@/lib/drizzle/schema";
 import { apiError, audit, requireSession, runApi } from "@/lib/api";
 import { getLocaleFromRequest, serverT } from "@/lib/i18n/server";
-import { prisma } from "@/lib/db";
-import { filePathFor } from "@/server/company-files";
+import { base64ToFile } from "@/server/company-files";
 
 export async function GET(req: NextRequest) {
   const locale = getLocaleFromRequest(req);
@@ -13,15 +14,11 @@ export async function GET(req: NextRequest) {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return apiError(t("api.missingId"), 400);
 
-    const record = await prisma.companyFile.findFirst({ where: { id, companyId: session.company.id } });
+    const [record] = await db.select().from(companyFile).where(and(eq(companyFile.id, id), eq(companyFile.companyId, session.company.id))).limit(1);
     if (!record) return apiError(t("api.fileNotFound"), 404);
+    if (!record.data) return apiError(t("api.fileNotFound"), 404);
 
-    let data: Buffer;
-    try {
-      data = await fs.readFile(filePathFor(session.company.id, record.storedName));
-    } catch {
-      return apiError(t("api.fileNotFound"), 404);
-    }
+    const data = base64ToFile(record.data);
 
     await audit(session, "FILE.DOWNLOADED", { entity: "company-file", entityId: record.id, metadata: { name: record.originalName }, req });
 

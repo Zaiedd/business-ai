@@ -10,6 +10,8 @@
 //   SMTP_USER, SMTP_PASS, SMTP_FROM (sender, optional)
 
 import nodemailer from "nodemailer";
+import { serverT } from "@/lib/i18n/server";
+import type { Locale } from "@/lib/i18n";
 
 export interface MailMessage {
   to: string;
@@ -50,20 +52,32 @@ export async function sendEmail(message: MailMessage): Promise<void> {
   console.log("==============================================\n");
 }
 
-export function resetPasswordEmail(to: string, link: string): MailMessage {
+export function resetPasswordEmail(to: string, link: string, locale: Locale = "en"): MailMessage {
+  const t = serverT(locale);
   return {
     to,
-    subject: "Reset your Business AI password",
-    html: `<p>You requested a password reset.</p><p><a href="${link}">Reset password</a></p><p>This link expires in 24 hours.</p>`,
-    text: `You requested a password reset.\n\n${link}\n\nThis link expires in 24 hours.`,
+    subject: t("mail.resetSubject"),
+    html: `<p>${t("mail.resetBody")}</p><p><a href="${link}">${t("mail.resetButton")}</a></p><p>${t("mail.resetExpiry")}</p>`,
+    text: `${t("mail.resetBody")}\n\n${link}\n\n${t("mail.resetExpiry")}`,
   };
 }
 
-export function verifyEmailEmail(to: string, link: string): MailMessage {
+export function verifyEmailEmail(to: string, link: string, locale: Locale = "en"): MailMessage {
+  const t = serverT(locale);
   return {
     to,
-    subject: "Verify your Business AI email",
-    html: `<p>Welcome to Business AI. Confirm your address:</p><p><a href="${link}">Verify email</a></p>`,
-    text: `Welcome to Business AI. Confirm your address:\n\n${link}`,
+    subject: t("mail.verifySubject"),
+    html: `<p>${t("mail.verifyBody")}</p><p><a href="${link}">${t("mail.verifyButton")}</a></p>`,
+    text: `${t("mail.verifyBody")}\n\n${link}`,
+  };
+}
+
+export function inviteUserEmail(to: string, link: string, companyName: string, locale: Locale = "en"): MailMessage {
+  const t = serverT(locale);
+  return {
+    to,
+    subject: t("mail.inviteSubject"),
+    html: `<p>${t("mail.inviteBody", { company: companyName })}</p><p><a href="${link}">${t("mail.inviteButton")}</a></p><p>${t("mail.resetExpiry")}</p>`,
+    text: `${t("mail.inviteBody", { company: companyName })}\n\n${link}\n\n${t("mail.resetExpiry")}`,
   };
 }

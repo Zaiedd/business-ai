@@ -2,14 +2,18 @@ import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
-import type { Role } from "@prisma/client";
-import { prisma } from "@/lib/db";
+import { eq, and } from "drizzle-orm";
+import { db, cuid } from "@/lib/db";
+import { session, user as userTable, auditLog, verificationToken, company as companyTable, branch as branchTable } from "@/lib/drizzle/schema";
 import { addDays } from "@/lib/utils";
 import { SESSION_COOKIE, signSessionToken, verifySessionToken, SESSION_TTL_SECONDS } from "@/lib/session-token";
 import type { SessionClaims } from "@/lib/session-token";
 
-export { SESSION_COOKIE, SESSION_TTL_SECONDS };
 export type { SessionClaims };
+
+// Re-export Role type for compatibility (previously from Prisma)
+export type Role = "OWNER" | "ADMIN" | "MANAGER" | "ACCOUNTANT" | "EMPLOYEE";
+export type SaleStatus = "COMPLETED" | "PENDING" | "REFUNDED";
 
 // ---------------------------------------------------------------------------
 // Password hashing (bcrypt — zero native deps, runs everywhere)
@@ -59,20 +63,19 @@ export interface SessionContext {
 }
 
 export async function issueSession(
-  user: { id: string; role: Role; companyId: string },
+  userRow: { id: string; role: Role; companyId: string },
   req: NextRequest | Request,
 ): Promise<string> {
-  const token = await signSessionToken({ sub: user.id, role: user.role, companyId: user.companyId });
+  const token = await signSessionToken({ sub: userRow.id, role: userRow.role, companyId: userRow.companyId });
   const meta = getRequestMeta(req);
-  await prisma.session.create({
-    data: {
-      token,
-      userId: user.id,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-      device: meta.device,
-      expiresAt: addDays(new Date(), 30),
-    },
+  await db.insert(session).values({
+    id: cuid(),
+    token,
+    userId: userRow.id,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+    device: meta.device,
+    expiresAt: addDays(new Date(), 30),
   });
   return token;
 }
@@ -111,7 +114,7 @@ export function clearSessionCookie(
 }
 
 export async function revokeSession(token: string): Promise<void> {
-  await prisma.session.updateMany({ where: { token }, data: { revokedAt: new Date() } });
+  await db.update(session).set({ revokedAt: new Date() }).where(eq(session.token, token));
 }
 
 // ---------------------------------------------------------------------------
@@ -124,34 +127,61 @@ export async function getSession(req?: NextRequest): Promise<SessionContext | nu
   const claims = await verifySessionToken(token);
   if (!claims?.sub) return null;
 
-  const session = await prisma.session.findUnique({ where: { token } });
-  if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
+  const [sessionRow] = await db.select().from(session).where(eq(session.token, token)).limit(1);
+  if (!sessionRow || sessionRow.revokedAt || sessionRow.expiresAt < new Date()) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    include: { company: true, branch: true },
-  });
-  if (!user || user.status !== "ACTIVE") return null;
+  const [userRow] = await db
+    .select({
+      id: userTable.id,
+      email: userTable.email,
+      name: userTable.name,
+      role: userTable.role,
+      status: userTable.status,
+      companyId: userTable.companyId,
+      branchId: userTable.branchId,
+      // Company fields
+      company: {
+        id: userTable.companyId,
+      },
+      branch: {
+        id: userTable.branchId,
+      },
+    })
+    .from(userTable)
+    .where(eq(userTable.id, sessionRow.userId))
+    .limit(1);
+
+  if (!userRow || userRow.status !== "ACTIVE") return null;
+
+  // Fetch company and branch details separately
+  const [companyRow] = await db.select().from(companyTable).where(eq(companyTable.id, userRow.companyId)).limit(1);
+  if (!companyRow) return null;
+
+  let branchRow: { id: string; name: string } | null = null;
+  if (userRow.branchId) {
+    const [b] = await db.select({ id: branchTable.id, name: branchTable.name }).from(branchTable).where(eq(branchTable.id, userRow.branchId)).limit(1);
+    branchRow = b ?? null;
+  }
 
   return {
     user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      status: user.status,
-      companyId: user.companyId,
-      branchId: user.branchId,
+      id: userRow.id,
+      email: userRow.email,
+      name: userRow.name,
+      role: userRow.role,
+      status: userRow.status,
+      companyId: userRow.companyId,
+      branchId: userRow.branchId,
     },
     company: {
-      id: user.company.id,
-      name: user.company.name,
-      slug: user.company.slug,
-      currency: user.company.currency,
-      taxRate: user.company.taxRate,
-      industry: user.company.industry,
+      id: companyRow.id,
+      name: companyRow.name,
+      slug: companyRow.slug,
+      currency: companyRow.currency,
+      taxRate: companyRow.taxRate,
+      industry: companyRow.industry,
     },
-    branch: user.branch ? { id: user.branch.id, name: user.branch.name } : null,
+    branch: branchRow,
     token,
   };
 }
@@ -171,17 +201,16 @@ export async function writeAudit(
   },
 ): Promise<void> {
   const meta = input.req ? getRequestMeta(input.req) : { ip: null, userAgent: null };
-  await prisma.auditLog.create({
-    data: {
-      action: input.action,
-      companyId: input.companyId,
-      userId: input.userId ?? null,
-      entity: input.entity ?? null,
-      entityId: input.entityId ?? null,
-      metadata: input.metadata ? JSON.stringify(input.metadata) : null,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-    },
+  await db.insert(auditLog).values({
+    id: cuid(),
+    action: input.action,
+    companyId: input.companyId,
+    userId: input.userId ?? null,
+    entity: input.entity ?? null,
+    entityId: input.entityId ?? null,
+    metadata: input.metadata ? JSON.stringify(input.metadata) : null,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
   });
 }
 
@@ -190,15 +219,19 @@ export async function writeAudit(
 // ---------------------------------------------------------------------------
 export async function createVerificationToken(userId: string, type: "EMAIL_VERIFY" | "PASSWORD_RESET", ttlHours = 24): Promise<string> {
   const token = randomBytes(32).toString("hex");
-  await prisma.verificationToken.create({
-    data: { token, userId, type, expiresAt: addDays(new Date(), ttlHours / 24) },
+  await db.insert(verificationToken).values({
+    id: cuid(),
+    token,
+    userId,
+    type,
+    expiresAt: addDays(new Date(), ttlHours / 24),
   });
   return token;
 }
 
-export async function consumeVerificationToken(token: string, type: "EMAIL_VERIFY" | "PASSWORD_RESET"): Promise<string | null> {
-  const vt = await prisma.verificationToken.findUnique({ where: { token } });
+export async function consumeVerificationToken(tokenStr: string, type: "EMAIL_VERIFY" | "PASSWORD_RESET"): Promise<string | null> {
+  const [vt] = await db.select().from(verificationToken).where(eq(verificationToken.token, tokenStr)).limit(1);
   if (!vt || vt.type !== type || vt.usedAt || vt.expiresAt < new Date()) return null;
-  await prisma.verificationToken.update({ where: { id: vt.id }, data: { usedAt: new Date() } });
+  await db.update(verificationToken).set({ usedAt: new Date() }).where(eq(verificationToken.id, vt.id));
   return vt.userId;
 }

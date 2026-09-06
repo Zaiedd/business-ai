@@ -1,4 +1,4 @@
-import type { Role } from "@prisma/client";
+import type { Role } from "@/lib/auth";
 
 export const ROLE_LABELS: Record<Role, string> = {
   OWNER: "Owner",

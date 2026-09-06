@@ -38,7 +38,7 @@ export function ForecastCard({ forecast, currency, recentPoints }: { forecast: F
           <Tooltip contentStyle={{ background: "var(--color-tooltip-bg, #ffffff)", border: "1px solid var(--chart-grid)", borderRadius: 8, fontSize: 12 }} formatter={(value: number, name: string) => [fmt(value), name === "actual" ? t("dashboard.charts.actual") : t("dashboard.charts.forecast")]} />
           <Line data={actual} dataKey="actual" name="actual" type="monotone" stroke="#64748b" strokeWidth={2} dot={false} isAnimationActive={false} />
           <ReferenceLine y={lastActual} stroke="var(--chart-grid)" strokeDasharray="4 4" />
-          <Line data={projected} dataKey="projected" name="projected" type="monotone" stroke="#4f46e5" strokeWidth={2.5} strokeDasharray="6 3" dot={false} isAnimationActive={false} />
+          <Line data={projected} dataKey="projected" name="projected" type="monotone" stroke="#2563eb" strokeWidth={2.5} strokeDasharray="6 3" dot={false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

@@ -54,10 +54,24 @@ export async function runApi(handler: () => Promise<Response>, locale?: Locale):
   try {
     return await handler();
   } catch (e) {
-    if (e instanceof UnauthorizedError) return apiError(t?.(`api.unauthorized`) ?? "Authentication required", 401, "UNAUTHORIZED");
-    if (e instanceof ForbiddenError) return apiError(t?.(`api.forbidden`) ?? "You do not have permission to perform this action", 403, "FORBIDDEN");
-    console.error(e);
-    return apiError(t?.(`api.unexpected`) ?? "Unexpected server error", 500, "INTERNAL");
+    // لو خطأ_known (auth، permission) — رده صريح
+    if (e instanceof UnauthorizedError)
+      return apiError(t?.(`api.unauthorized`) ?? "Authentication required", 401, "UNAUTHORIZED");
+    if (e instanceof ForbiddenError)
+      return apiError(t?.(`api.forbidden`) ?? "You do not have permission to perform this action", 403, "FORBIDDEN");
+
+    // أي خطأ آخر — سجّل كامل التفاصيل على السيرفر، ورجّع رسالة عامة للمستخدم
+    const message = e instanceof Error ? e.message : String(e);
+    const stack = e instanceof Error ? e.stack : undefined;
+    console.error(`[API Error] ${message}`, stack ? `\n${stack}` : "");
+
+    return apiError(
+      process.env.NODE_ENV === "production"
+        ? t?.(`api.unexpected`) ?? "Unexpected server error"
+        : `Unexpected server error: ${message}`,
+      500,
+      "INTERNAL"
+    );
   }
 }
 

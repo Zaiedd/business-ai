@@ -25,7 +25,7 @@ export function InsightsPanel({ insights }: { insights: Insight[] }) {
           <p className="text-xs text-slate-500 dark:text-slate-400">{t("dashboard.insightsSubtitle")}</p>
         </div>
       </div>
-      <ul className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
+      <ul className="max-h-[520px] space-y-3 overflow-y-auto pe-1">
         {insights.map((insight) => {
           const s = SEVERITY_STYLES[insight.severity];
           return (

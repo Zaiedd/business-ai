@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { sale, expense as expenseTable, product as productTable, customer as customerTable, branch as branchTable, user as userTable } from "@/lib/drizzle/schema";
 import { escapeCsv, apiError, requireSession, runApi } from "@/lib/api";
 import { rangeToBounds } from "@/server/analytics";
 import { toDateKey } from "@/lib/utils";
@@ -13,11 +15,25 @@ type T = ReturnType<typeof serverT>;
 
 async function buildRows(type: ReportType, companyId: string, from: Date, to: Date, t: T): Promise<{ header: string[]; rows: unknown[][] }> {
   if (type === "sales") {
-    const sales = await prisma.sale.findMany({
-      where: { companyId, date: { gte: from, lte: to } },
-      orderBy: { date: "asc" },
-      include: { branch: true, user: true, customer: true },
-    });
+    const sales = await db
+      .select({
+        invoiceNo: sale.invoiceNo,
+        date: sale.date,
+        subtotal: sale.subtotal,
+        discount: sale.discount,
+        tax: sale.tax,
+        total: sale.total,
+        status: sale.status,
+        branch: branchTable,
+        user: userTable,
+        customer: customerTable,
+      })
+      .from(sale)
+      .leftJoin(branchTable, eq(sale.branchId, branchTable.id))
+      .leftJoin(userTable, eq(sale.userId, userTable.id))
+      .leftJoin(customerTable, eq(sale.customerId, customerTable.id))
+      .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to)))
+      .orderBy(sale.date);
     return {
       header: [
         t("reports.headers.invoice"), t("reports.headers.date"), t("reports.headers.branch"), t("reports.headers.employee"),
@@ -28,11 +44,18 @@ async function buildRows(type: ReportType, companyId: string, from: Date, to: Da
     };
   }
   if (type === "expenses") {
-    const expenses = await prisma.expense.findMany({
-      where: { companyId, date: { gte: from, lte: to } },
-      orderBy: { date: "asc" },
-      include: { branch: true },
-    });
+    const expenses = await db
+      .select({
+        date: expenseTable.date,
+        category: expenseTable.category,
+        description: expenseTable.description,
+        amount: expenseTable.amount,
+        branch: branchTable,
+      })
+      .from(expenseTable)
+      .leftJoin(branchTable, eq(expenseTable.branchId, branchTable.id))
+      .where(and(eq(expenseTable.companyId, companyId), gte(expenseTable.date, from), lte(expenseTable.date, to)))
+      .orderBy(expenseTable.date);
     return {
       header: [
         t("reports.headers.date"), t("reports.headers.category"), t("reports.headers.description"),
@@ -42,7 +65,7 @@ async function buildRows(type: ReportType, companyId: string, from: Date, to: Da
     };
   }
   if (type === "products") {
-    const products = await prisma.product.findMany({ where: { companyId }, orderBy: { name: "asc" } });
+    const products = await db.select().from(productTable).where(eq(productTable.companyId, companyId)).orderBy(productTable.name);
     return {
       header: [
         t("reports.headers.name"), t("reports.headers.sku"), t("reports.headers.category"), t("reports.headers.cost"),
@@ -52,7 +75,7 @@ async function buildRows(type: ReportType, companyId: string, from: Date, to: Da
     };
   }
   if (type === "customers") {
-    const customers = await prisma.customer.findMany({ where: { companyId }, orderBy: { totalSpent: "desc" } });
+    const customers = await db.select().from(customerTable).where(eq(customerTable.companyId, companyId)).orderBy(desc(customerTable.totalSpent));
     return {
       header: [
         t("reports.headers.name"), t("reports.headers.email"), t("reports.headers.phone"), t("reports.headers.segment"),
@@ -62,12 +85,17 @@ async function buildRows(type: ReportType, companyId: string, from: Date, to: Da
     };
   }
   if (type === "branches") {
-    const branches = await prisma.branch.findMany({ where: { companyId } });
-    const perf = await prisma.$queryRaw<Array<{ id: string | null; orders: bigint | number; revenue: number }>>`
-      SELECT b.id as id, COUNT(s.id) as orders, COALESCE(SUM(s.total), 0) as revenue
-      FROM Sale s LEFT JOIN Branch b ON b.id = s.branchId
-      WHERE s.companyId = ${companyId} AND s.date BETWEEN ${from} AND ${to} AND s.status = 'COMPLETED'
-      GROUP BY b.id`;
+    const branches = await db.select().from(branchTable).where(eq(branchTable.companyId, companyId));
+    const perf = await db
+      .select({
+        id: branchTable.id,
+        orders: sql<number>`COUNT(${sale.id})`,
+        revenue: sql<number>`COALESCE(SUM(${sale.total}), 0)`,
+      })
+      .from(sale)
+      .leftJoin(branchTable, eq(branchTable.id, sale.branchId))
+      .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), eq(sale.status, "COMPLETED")))
+      .groupBy(branchTable.id);
     const map = new Map(perf.map((p) => [p.id, p]));
     return {
       header: [
@@ -81,12 +109,17 @@ async function buildRows(type: ReportType, companyId: string, from: Date, to: Da
     };
   }
   // employees
-  const users = await prisma.user.findMany({ where: { companyId }, include: { branch: true } });
-  const perf = await prisma.$queryRaw<Array<{ id: string | null; orders: bigint | number; revenue: number }>>`
-    SELECT u.id as id, COUNT(s.id) as orders, COALESCE(SUM(s.total), 0) as revenue
-    FROM Sale s LEFT JOIN User u ON u.id = s.userId
-    WHERE s.companyId = ${companyId} AND s.date BETWEEN ${from} AND ${to} AND s.status = 'COMPLETED'
-    GROUP BY u.id`;
+  const users = await db.select().from(userTable).where(eq(userTable.companyId, companyId));
+  const perf = await db
+    .select({
+      id: userTable.id,
+      orders: sql<number>`COUNT(${sale.id})`,
+      revenue: sql<number>`COALESCE(SUM(${sale.total}), 0)`,
+    })
+    .from(sale)
+    .leftJoin(userTable, eq(userTable.id, sale.userId))
+    .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), eq(sale.status, "COMPLETED")))
+    .groupBy(userTable.id);
   const map = new Map(perf.map((p) => [p.id, p]));
   return {
     header: [
@@ -95,7 +128,7 @@ async function buildRows(type: ReportType, companyId: string, from: Date, to: Da
     ],
     rows: users.map((u) => {
       const p = map.get(u.id);
-      return [u.name, u.email, u.role, u.branch?.name ?? "", Number(p?.orders ?? 0), Number(p?.revenue ?? 0)];
+      return [u.name, u.email, u.role, "", Number(p?.orders ?? 0), Number(p?.revenue ?? 0)];
     }),
   };
 }

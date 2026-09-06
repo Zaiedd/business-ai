@@ -1,5 +1,6 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/db";
+import { eq, and, desc, asc, sql, gte, lte, count } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { sale, saleItem, product as productTable, expense as expenseTable, customer as customerTable, branch as branchTable, user as userTable } from "@/lib/drizzle/schema";
 import { addDays, clamp, dayKey, endOfDay, formatShortDate, round2, safeParseFloat, safeParseInt, startOfDay } from "@/lib/utils";
 import type { DateRange } from "@/lib/validators";
 
@@ -71,28 +72,36 @@ export function rangeToBounds(range: DateRange): { from: Date; to: Date; prevFro
 }
 
 export async function getPeriodTotals(companyId: string, from: Date, to: Date): Promise<PeriodTotals> {
-  const [saleRow, expenseRow, grossRow, itemsRow] = await Promise.all([
-    prisma.$queryRaw<Array<{ orders: bigint | number; revenue: number }>>(Prisma.sql`
-      SELECT COUNT(*) as orders, COALESCE(SUM(total), 0) as revenue
-      FROM Sale WHERE companyId = ${companyId} AND date BETWEEN ${from} AND ${to} AND status = 'COMPLETED'`),
-    prisma.$queryRaw<Array<{ amount: number }>>(Prisma.sql`
-      SELECT COALESCE(SUM(amount), 0) as amount
-      FROM Expense WHERE companyId = ${companyId} AND date BETWEEN ${from} AND ${to}`),
-    prisma.$queryRaw<Array<{ gross: number }>>(Prisma.sql`
-      SELECT COALESCE(SUM((i.unitPrice - i.costPrice) * i.qty), 0) as gross
-      FROM SaleItem i JOIN Sale s ON s.id = i.saleId
-      WHERE s.companyId = ${companyId} AND s.date BETWEEN ${from} AND ${to} AND s.status = 'COMPLETED'`),
-    prisma.$queryRaw<Array<{ qty: bigint | number }>>(Prisma.sql`
-      SELECT COALESCE(SUM(i.qty), 0) as qty
-      FROM SaleItem i JOIN Sale s ON s.id = i.saleId
-      WHERE s.companyId = ${companyId} AND s.date BETWEEN ${from} AND ${to} AND s.status = 'COMPLETED'`),
-  ]);
+  const [saleRow] = await db
+    .select({
+      orders: sql<number>`COUNT(*)::int`,
+      revenue: sql<number>`COALESCE(SUM(${sale.total}), 0)`,
+    })
+    .from(sale)
+    .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), eq(sale.status, "COMPLETED")));
 
-  const revenue = round2(safeParseFloat(saleRow[0]?.revenue));
-  const expenses = round2(safeParseFloat(expenseRow[0]?.amount));
-  const grossProfit = round2(safeParseFloat(grossRow[0]?.gross));
-  const orders = safeParseInt(saleRow[0]?.orders);
-  const itemsSold = safeParseInt(itemsRow[0]?.qty);
+  const [expenseRow] = await db
+    .select({ amount: sql<number>`COALESCE(SUM(${expenseTable.amount}), 0)` })
+    .from(expenseTable)
+    .where(and(eq(expenseTable.companyId, companyId), gte(expenseTable.date, from), lte(expenseTable.date, to)));
+
+  const [grossRow] = await db
+    .select({ gross: sql<number>`COALESCE(SUM((${saleItem.unitPrice} - ${saleItem.costPrice}) * ${saleItem.qty}), 0)` })
+    .from(saleItem)
+    .innerJoin(sale, eq(sale.id, saleItem.saleId))
+    .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), eq(sale.status, "COMPLETED")));
+
+  const [itemsRow] = await db
+    .select({ qty: sql<number>`COALESCE(SUM(${saleItem.qty}), 0)` })
+    .from(saleItem)
+    .innerJoin(sale, eq(sale.id, saleItem.saleId))
+    .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), eq(sale.status, "COMPLETED")));
+
+  const revenue = round2(Number(saleRow?.revenue ?? 0));
+  const expenses = round2(Number(expenseRow?.amount ?? 0));
+  const grossProfit = round2(Number(grossRow?.gross ?? 0));
+  const orders = Number(saleRow?.orders ?? 0);
+  const itemsSold = Number(itemsRow?.qty ?? 0);
   const netProfit = round2(grossProfit - expenses);
   const cashFlow = round2(revenue - expenses);
   const avgOrderValue = orders > 0 ? round2(revenue / orders) : 0;
@@ -103,14 +112,14 @@ export async function getPeriodTotals(companyId: string, from: Date, to: Date): 
 
 export async function getDailySeries(companyId: string, from: Date, to: Date): Promise<DailyPoint[]> {
   const [sales, expenses] = await Promise.all([
-    prisma.sale.findMany({
-      where: { companyId, status: "COMPLETED", date: { gte: from, lte: to } },
-      select: { date: true, total: true },
-    }),
-    prisma.expense.findMany({
-      where: { companyId, date: { gte: from, lte: to } },
-      select: { date: true, amount: true },
-    }),
+    db
+      .select({ date: sale.date, total: sale.total })
+      .from(sale)
+      .where(and(eq(sale.companyId, companyId), eq(sale.status, "COMPLETED"), gte(sale.date, from), lte(sale.date, to))),
+    db
+      .select({ date: expenseTable.date, amount: expenseTable.amount })
+      .from(expenseTable)
+      .where(and(eq(expenseTable.companyId, companyId), gte(expenseTable.date, from), lte(expenseTable.date, to))),
   ]);
 
   const byDay = new Map<string, DailyPoint>();
@@ -134,15 +143,23 @@ export async function getDailySeries(companyId: string, from: Date, to: Date): P
 }
 
 export async function getTopProducts(companyId: string, from: Date, to: Date, limit = 6): Promise<ProductPerformance[]> {
-  const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
-    SELECT p.id as pid, p.name as name, p.category as category,
-      SUM(i.qty) as qty, SUM(i.total) as revenue,
-      SUM((i.unitPrice - i.costPrice) * i.qty) as profit
-    FROM SaleItem i
-    JOIN Sale s ON s.id = i.saleId
-    JOIN Product p ON p.id = i.productId
-    WHERE s.companyId = ${companyId} AND s.date BETWEEN ${from} AND ${to} AND s.status = 'COMPLETED'
-    GROUP BY p.id ORDER BY profit DESC LIMIT ${limit}`);
+  const rows = await db
+    .select({
+      pid: productTable.id,
+      name: productTable.name,
+      category: productTable.category,
+      qty: sql<number>`SUM(${saleItem.qty})`,
+      revenue: sql<number>`SUM(${saleItem.total})`,
+      profit: sql<number>`SUM((${saleItem.unitPrice} - ${saleItem.costPrice}) * ${saleItem.qty})`,
+    })
+    .from(saleItem)
+    .innerJoin(sale, eq(sale.id, saleItem.saleId))
+    .innerJoin(productTable, eq(productTable.id, saleItem.productId))
+    .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), eq(sale.status, "COMPLETED")))
+    .groupBy(productTable.id)
+    .orderBy(desc(sql`SUM((${saleItem.unitPrice} - ${saleItem.costPrice}) * ${saleItem.qty})`))
+    .limit(limit);
+
   return rows.map((r) => ({
     id: String(r.pid ?? ""),
     name: String(r.name ?? "Unknown"),
@@ -154,11 +171,20 @@ export async function getTopProducts(companyId: string, from: Date, to: Date, li
 }
 
 export async function getTopBranches(companyId: string, from: Date, to: Date, limit = 6): Promise<BranchPerformance[]> {
-  const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
-    SELECT b.id as id, b.name as name, COUNT(s.id) as orders, COALESCE(SUM(s.total), 0) as revenue
-    FROM Sale s LEFT JOIN Branch b ON b.id = s.branchId
-    WHERE s.companyId = ${companyId} AND s.date BETWEEN ${from} AND ${to} AND s.status = 'COMPLETED'
-    GROUP BY b.id ORDER BY revenue DESC LIMIT ${limit}`);
+  const rows = await db
+    .select({
+      id: branchTable.id,
+      name: branchTable.name,
+      orders: sql<number>`COUNT(${sale.id})`,
+      revenue: sql<number>`COALESCE(SUM(${sale.total}), 0)`,
+    })
+    .from(sale)
+    .leftJoin(branchTable, eq(branchTable.id, sale.branchId))
+    .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), eq(sale.status, "COMPLETED")))
+    .groupBy(branchTable.id, branchTable.name)
+    .orderBy(desc(sql`SUM(${sale.total})`))
+    .limit(limit);
+
   return rows.map((r) => ({
     id: r.id ? String(r.id) : null,
     name: r.name ? String(r.name) : "Unassigned",
@@ -168,11 +194,20 @@ export async function getTopBranches(companyId: string, from: Date, to: Date, li
 }
 
 export async function getTopEmployees(companyId: string, from: Date, to: Date, limit = 6): Promise<EmployeePerformance[]> {
-  const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
-    SELECT u.id as id, u.name as name, COUNT(s.id) as orders, COALESCE(SUM(s.total), 0) as revenue
-    FROM Sale s LEFT JOIN User u ON u.id = s.userId
-    WHERE s.companyId = ${companyId} AND s.date BETWEEN ${from} AND ${to} AND s.status = 'COMPLETED'
-    GROUP BY u.id ORDER BY revenue DESC LIMIT ${limit}`);
+  const rows = await db
+    .select({
+      id: userTable.id,
+      name: userTable.name,
+      orders: sql<number>`COUNT(${sale.id})`,
+      revenue: sql<number>`COALESCE(SUM(${sale.total}), 0)`,
+    })
+    .from(sale)
+    .leftJoin(userTable, eq(userTable.id, sale.userId))
+    .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), eq(sale.status, "COMPLETED")))
+    .groupBy(userTable.id, userTable.name)
+    .orderBy(desc(sql`SUM(${sale.total})`))
+    .limit(limit);
+
   return rows.map((r) => ({
     id: r.id ? String(r.id) : null,
     name: r.name ? String(r.name) : "Unassigned",
@@ -182,10 +217,16 @@ export async function getTopEmployees(companyId: string, from: Date, to: Date, l
 }
 
 export async function getExpenseByCategory(companyId: string, from: Date, to: Date): Promise<ExpenseSlice[]> {
-  const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
-    SELECT category, COALESCE(SUM(amount), 0) as amount
-    FROM Expense WHERE companyId = ${companyId} AND date BETWEEN ${from} AND ${to}
-    GROUP BY category ORDER BY amount DESC`);
+  const rows = await db
+    .select({
+      category: expenseTable.category,
+      amount: sql<number>`COALESCE(SUM(${expenseTable.amount}), 0)`,
+    })
+    .from(expenseTable)
+    .where(and(eq(expenseTable.companyId, companyId), gte(expenseTable.date, from), lte(expenseTable.date, to)))
+    .groupBy(expenseTable.category)
+    .orderBy(desc(sql`SUM(${expenseTable.amount})`));
+
   return rows.map((r) => ({
     category: String(r.category ?? "Other"),
     amount: round2(safeParseFloat(r.amount)),
@@ -193,12 +234,22 @@ export async function getExpenseByCategory(companyId: string, from: Date, to: Da
 }
 
 export async function getStockStatus(companyId: string, limit = 8) {
-  const products = await prisma.product.findMany({
-    where: { companyId },
-    select: { id: true, name: true, sku: true, category: true, stockQty: true, lowStockThreshold: true, sellingPrice: true, costPrice: true },
-    orderBy: { stockQty: "asc" },
-    take: 200,
-  });
+  const products = await db
+    .select({
+      id: productTable.id,
+      name: productTable.name,
+      sku: productTable.sku,
+      category: productTable.category,
+      stockQty: productTable.stockQty,
+      lowStockThreshold: productTable.lowStockThreshold,
+      sellingPrice: productTable.sellingPrice,
+      costPrice: productTable.costPrice,
+    })
+    .from(productTable)
+    .where(eq(productTable.companyId, companyId))
+    .orderBy(productTable.stockQty)
+    .limit(200);
+
   const low = products.filter((p) => p.stockQty <= p.lowStockThreshold);
   const out = products.filter((p) => p.stockQty <= 0);
   const top = products
@@ -209,12 +260,20 @@ export async function getStockStatus(companyId: string, limit = 8) {
 }
 
 export async function getAtRiskCustomers(companyId: string, inactiveDays = 45, limit = 8): Promise<AtRiskCustomer[]> {
-  const customers = await prisma.customer.findMany({
-    where: { companyId, totalOrders: { gte: 1 } },
-    select: { id: true, name: true, email: true, totalOrders: true, totalSpent: true, lastPurchaseAt: true },
-    orderBy: { lastPurchaseAt: "asc" },
-    take: 200,
-  });
+  const customers = await db
+    .select({
+      id: customerTable.id,
+      name: customerTable.name,
+      email: customerTable.email,
+      totalOrders: customerTable.totalOrders,
+      totalSpent: customerTable.totalSpent,
+      lastPurchaseAt: customerTable.lastPurchaseAt,
+    })
+    .from(customerTable)
+    .where(and(eq(customerTable.companyId, companyId), gte(customerTable.totalOrders, 1)))
+    .orderBy(customerTable.lastPurchaseAt)
+    .limit(200);
+
   const now = Date.now();
   return customers
     .map((c) => ({
@@ -231,19 +290,31 @@ export async function getAtRiskCustomers(companyId: string, inactiveDays = 45, l
 }
 
 export async function getCustomerStats(companyId: string, from: Date, to: Date) {
-  const total = await prisma.customer.count({ where: { companyId } });
-  const [activeRow, repeatRow] = await Promise.all([
-    prisma.$queryRaw<Array<{ active: bigint | number }>>(Prisma.sql`
-      SELECT COUNT(DISTINCT customerId) as active FROM Sale
-      WHERE companyId = ${companyId} AND date BETWEEN ${from} AND ${to} AND customerId IS NOT NULL`),
-    prisma.$queryRaw<Array<{ c: bigint | number }>>(Prisma.sql`
-      SELECT COUNT(*) as c FROM (
-        SELECT customerId FROM Sale
-        WHERE companyId = ${companyId} AND date BETWEEN ${from} AND ${to} AND customerId IS NOT NULL
-        GROUP BY customerId HAVING COUNT(*) > 1)`),
-  ]);
-  const active = safeParseInt(activeRow[0]?.active);
-  const repeat = safeParseInt(repeatRow[0]?.c);
+  const [totalRow] = await db
+    .select({ total: count() })
+    .from(customerTable)
+    .where(eq(customerTable.companyId, companyId));
+
+  const [activeRow] = await db
+    .select({ active: sql<number>`COUNT(DISTINCT ${sale.customerId})::int` })
+    .from(sale)
+    .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), sql`${sale.customerId} IS NOT NULL`));
+
+  const [repeatRow] = await db
+    .select({ c: sql<number>`COUNT(*)::int` })
+    .from(
+      db
+        .select({ customerId: sale.customerId })
+        .from(sale)
+        .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), sql`${sale.customerId} IS NOT NULL`))
+        .groupBy(sale.customerId)
+        .having(sql`COUNT(*) > 1`)
+        .as("repeatSub")
+    );
+
+  const total = Number(totalRow?.total ?? 0);
+  const active = Number(activeRow?.active ?? 0);
+  const repeat = Number(repeatRow?.c ?? 0);
   return {
     totalCustomers: total,
     activeCustomers: active,
@@ -252,21 +323,24 @@ export async function getCustomerStats(companyId: string, from: Date, to: Date) 
 }
 
 export async function getRecentSales(companyId: string, limit = 8) {
-  return prisma.sale.findMany({
-    where: { companyId },
-    orderBy: { date: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      invoiceNo: true,
-      date: true,
-      total: true,
-      status: true,
-      branch: { select: { name: true } },
-      customer: { select: { name: true } },
-      user: { select: { name: true } },
-    },
-  });
+  return db
+    .select({
+      id: sale.id,
+      invoiceNo: sale.invoiceNo,
+      date: sale.date,
+      total: sale.total,
+      status: sale.status,
+      branch: { name: branchTable.name },
+      customer: { name: customerTable.name },
+      user: { name: userTable.name },
+    })
+    .from(sale)
+    .leftJoin(branchTable, eq(sale.branchId, branchTable.id))
+    .leftJoin(customerTable, eq(sale.customerId, customerTable.id))
+    .leftJoin(userTable, eq(sale.userId, userTable.id))
+    .where(eq(sale.companyId, companyId))
+    .orderBy(desc(sale.date))
+    .limit(limit);
 }
 
 // Composite business-health score (0-100), deterministic.

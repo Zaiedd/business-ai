@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { Building2, Bell } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useI18n } from "@/components/i18n-provider";
-import type { Role } from "@prisma/client";
+import type { Role } from "@/lib/auth";
 
 interface HeaderProps {
   companyName: string;
@@ -37,13 +36,11 @@ export function Header({ companyName, branchName, role }: HeaderProps) {
         <ThemeToggle />
         <Link
           href="/dashboard#alerts"
-          className="relative rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
           title={t("dashboard.charts.alertsTitle")}
         >
           <Bell className="size-5" />
-          <span className={cn("absolute end-1.5 top-1.5 size-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-950")} />
         </Link>
-        <span className="hidden text-xs text-slate-400 dark:text-slate-500 sm:block">{t("common.live")}</span>
       </div>
     </header>
   );

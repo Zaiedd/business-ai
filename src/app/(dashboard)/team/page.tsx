@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/components/i18n-provider";
+import { useToast } from "@/components/ui/toast";
 
 interface TeamUser {
   id: string;
@@ -27,7 +28,8 @@ interface TeamUser {
 interface Branch { id: string; name: string; address: string | null; city: string | null }
 
 export default function TeamPage() {
-  const { t } = useI18n();
+  const { toast } = useToast();
+  const { t, locale } = useI18n();
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [myRole, setMyRole] = useState<string>("OWNER");
@@ -82,7 +84,7 @@ export default function TeamPage() {
     });
     const body = await res.json();
     if (!res.ok) {
-      alert(body.error ?? t("team.roleFailed"));
+      toast(body.error ?? t("team.roleFailed"), "error");
       return;
     }
     load();
@@ -97,7 +99,7 @@ export default function TeamPage() {
     });
     const body = await res.json();
     if (!res.ok) {
-      alert(body.error ?? t("team.statusFailed"));
+      toast(body.error ?? t("team.statusFailed"), "error");
       return;
     }
     load();
@@ -172,6 +174,9 @@ export default function TeamPage() {
               />
               <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-3">
                 {inviteError && <p className="text-sm text-rose-600">{inviteError}</p>}
+                <Button variant="ghost" size="md" onClick={() => { setShowInvite(false); setError(null); }}>
+                  {t("common.cancel") || "Cancel"}
+                </Button>
                 <Button type="submit" loading={inviting} className="ms-auto">
                   {t("team.sendInvite")}
                 </Button>
@@ -193,23 +198,23 @@ export default function TeamPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
-                  <th className="py-2 pr-4 font-semibold">{t("team.member")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("team.role")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("team.branch")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("team.lastLogin")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("team.status")}</th>
+                <tr className="border-b border-slate-100 text-start text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                  <th className="py-2 pe-4 font-semibold">{t("team.member")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("team.role")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("team.branch")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("team.lastLogin")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("team.status")}</th>
                   <th className="py-2 text-end font-semibold">{t("team.actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
                 {users.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pe-4">
                       <div className="font-medium text-slate-900 dark:text-slate-100">{u.name}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400">{u.email}</div>
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pe-4">
                       {ROLE_RANK[myRole as keyof typeof ROLE_RANK] > ROLE_RANK[u.role as keyof typeof ROLE_RANK] ? (
                         <select
                           value={u.role}
@@ -224,9 +229,9 @@ export default function TeamPage() {
                         <Badge variant="brand">{ROLE_LABELS[u.role as keyof typeof ROLE_LABELS]}</Badge>
                       )}
                     </td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-400">{u.branch?.name ?? t("common.allBranches")}</td>
-                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{u.lastLoginAt ? formatDate(u.lastLoginAt) : t("common.never")}</td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pe-4 text-slate-600 dark:text-slate-400">{u.branch?.name ?? t("common.allBranches")}</td>
+                    <td className="py-3 pe-4 text-slate-500 dark:text-slate-400">{u.lastLoginAt ? formatDate(u.lastLoginAt, locale) : t("common.never")}</td>
+                    <td className="py-3 pe-4">
                       <Badge variant={u.status === "ACTIVE" ? "success" : "neutral"}>{t(`team.statusLabels.${u.status}`)}</Badge>
                     </td>
                     <td className="py-3 text-end">
@@ -243,6 +248,12 @@ export default function TeamPage() {
           )}
         </CardBody>
       </Card>
+
+      {!loading && !error && users.length === 0 && (
+        <div className="py-12 text-center">
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t("team.empty") || "No team members yet."}</p>
+        </div>
+      )}
     </div>
   );
 }

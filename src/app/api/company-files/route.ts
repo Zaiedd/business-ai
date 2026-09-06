@@ -1,16 +1,17 @@
 import type { NextRequest } from "next/server";
+import { eq, and, desc } from "drizzle-orm";
+import { db, cuid } from "@/lib/db";
+import { companyFile, user as userTable } from "@/lib/drizzle/schema";
 import { apiError, apiOk, audit, requireSession, runApi } from "@/lib/api";
 import { getLocaleFromRequest, serverT } from "@/lib/i18n/server";
 import { isSupportedExt } from "@/server/file-analyzer";
 import { analyzeFileData } from "@/server/file-analyzer";
-import { prisma } from "@/lib/db";
 import {
   MAX_FILE_BYTES,
   buildStoredName,
+  fileToBase64,
   listCompanyFiles,
   safeOriginalName,
-  storeUploadedFile,
-  deleteStoredFile,
 } from "@/server/company-files";
 
 export async function GET(req: NextRequest) {
@@ -46,7 +47,6 @@ export async function POST(req: NextRequest) {
     const originalName = safeOriginalName(file.name);
     const ext = (originalName.includes(".") ? originalName.slice(originalName.lastIndexOf(".") + 1) : "").toLowerCase();
     const storedName = buildStoredName(originalName);
-    await storeUploadedFile(session.company.id, storedName, buf);
 
     let analysis: string | null = null;
     if (isSupportedExt(ext)) {
@@ -54,30 +54,37 @@ export async function POST(req: NextRequest) {
       analysis = analyzed ? [analyzed.narrative, ...analyzed.bullets].join("\n") : null;
     }
 
-    const record = await prisma.companyFile.create({
-      data: {
-        companyId: session.company.id,
-        uploadedById: session.user.id,
-        originalName,
-        storedName,
-        mimeType: file.type || "application/octet-stream",
-        ext,
-        size: file.size,
-        analysis,
-      },
-      select: {
-        id: true,
-        originalName: true,
-        mimeType: true,
-        ext: true,
-        size: true,
-        analysis: true,
-        createdAt: true,
-        uploadedBy: { select: { name: true } },
-      },
+    const fileId = cuid();
+    await db.insert(companyFile).values({
+      id: fileId,
+      companyId: session.company.id,
+      uploadedById: session.user.id,
+      originalName,
+      storedName,
+      mimeType: file.type || "application/octet-stream",
+      ext,
+      size: file.size,
+      analysis,
+      data: fileToBase64(buf),
     });
 
-    await audit(session, "FILE.UPLOADED", { entity: "company-file", entityId: record.id, metadata: { name: originalName, size: file.size, ext }, req });
+    const [record] = await db
+      .select({
+        id: companyFile.id,
+        originalName: companyFile.originalName,
+        mimeType: companyFile.mimeType,
+        ext: companyFile.ext,
+        size: companyFile.size,
+        analysis: companyFile.analysis,
+        createdAt: companyFile.createdAt,
+        uploadedBy: { name: userTable.name },
+      })
+      .from(companyFile)
+      .leftJoin(userTable, eq(companyFile.uploadedById, userTable.id))
+      .where(eq(companyFile.id, fileId))
+      .limit(1);
+
+    await audit(session, "FILE.UPLOADED", { entity: "company-file", entityId: fileId, metadata: { name: originalName, size: file.size, ext }, req });
     return apiOk({ file: record }, { status: 201 });
   }, locale);
 }
@@ -90,11 +97,10 @@ export async function DELETE(req: NextRequest) {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return apiError(t("api.missingId"), 400);
 
-    const record = await prisma.companyFile.findFirst({ where: { id, companyId: session.company.id } });
+    const [record] = await db.select().from(companyFile).where(and(eq(companyFile.id, id), eq(companyFile.companyId, session.company.id))).limit(1);
     if (!record) return apiError(t("api.fileNotFound"), 404);
 
-    await deleteStoredFile(session.company.id, record.storedName);
-    await prisma.companyFile.delete({ where: { id: record.id } });
+    await db.delete(companyFile).where(eq(companyFile.id, record.id));
     await audit(session, "FILE.DELETED", { entity: "company-file", entityId: record.id, metadata: { name: record.originalName }, req });
     return apiOk({ ok: true });
   }, locale);

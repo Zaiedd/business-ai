@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { eq, and, count } from "drizzle-orm";
+import { db, cuid } from "@/lib/db";
+import { product as productTable, saleItem as saleItemTable, company as companyTable } from "@/lib/drizzle/schema";
 import { apiError, apiOk, audit, handleZod, requireSession, runApi } from "@/lib/api";
 import { getInventory } from "@/server/inventory";
 import { productSchema } from "@/lib/validators";
@@ -10,9 +12,9 @@ export async function GET(req: NextRequest) {
     const session = await requireSession(req);
     const [products, company] = await Promise.all([
       getInventory(session.company.id),
-      prisma.company.findUnique({ where: { id: session.company.id }, select: { currency: true } }),
+      db.select({ currency: companyTable.currency }).from(companyTable).where(eq(companyTable.id, session.company.id)).limit(1),
     ]);
-    return apiOk({ products, currency: company?.currency ?? "USD" });
+    return apiOk({ products, currency: company[0]?.currency ?? "USD" });
   });
 }
 
@@ -30,20 +32,21 @@ export async function POST(req: NextRequest) {
     const parsed = productSchema.safeParse(body);
     if (!parsed.success) return handleZod(parsed.error, locale);
 
-    const product = await prisma.product.create({
-      data: {
-        name: parsed.data.name,
-        sku: parsed.data.sku ?? null,
-        category: parsed.data.category ?? null,
-        costPrice: parsed.data.costPrice,
-        sellingPrice: parsed.data.sellingPrice,
-        stockQty: parsed.data.stockQty,
-        lowStockThreshold: parsed.data.lowStockThreshold,
-        companyId: session.company.id,
-      },
+    const productId = cuid();
+    await db.insert(productTable).values({
+      id: productId,
+      name: parsed.data.name,
+      sku: parsed.data.sku ?? null,
+      category: parsed.data.category ?? null,
+      costPrice: parsed.data.costPrice,
+      sellingPrice: parsed.data.sellingPrice,
+      stockQty: parsed.data.stockQty,
+      lowStockThreshold: parsed.data.lowStockThreshold,
+      companyId: session.company.id,
     });
 
-    await audit(session, "INVENTORY.PRODUCT_CREATED", { entity: "Product", entityId: product.id, metadata: { name: product.name }, req });
+    const [product] = await db.select().from(productTable).where(eq(productTable.id, productId)).limit(1);
+    await audit(session, "INVENTORY.PRODUCT_CREATED", { entity: "Product", entityId: productId, metadata: { name: product!.name }, req });
     return apiOk({ product }, { status: 201 });
   }, locale);
 }
@@ -65,12 +68,12 @@ export async function PATCH(req: NextRequest) {
     const parsed = productSchema.safeParse(body);
     if (!parsed.success) return handleZod(parsed.error, locale);
 
-    const existing = await prisma.product.findFirst({ where: { id, companyId: session.company.id } });
+    const [existing] = await db.select({ id: productTable.id }).from(productTable).where(and(eq(productTable.id, id), eq(productTable.companyId, session.company.id))).limit(1);
     if (!existing) return apiError(t("api.productNotFound"), 404);
 
-    const product = await prisma.product.update({
-      where: { id },
-      data: {
+    const [product] = await db
+      .update(productTable)
+      .set({
         name: parsed.data.name,
         sku: parsed.data.sku ?? null,
         category: parsed.data.category ?? null,
@@ -78,10 +81,11 @@ export async function PATCH(req: NextRequest) {
         sellingPrice: parsed.data.sellingPrice,
         stockQty: parsed.data.stockQty,
         lowStockThreshold: parsed.data.lowStockThreshold,
-      },
-    });
+      })
+      .where(eq(productTable.id, id))
+      .returning();
 
-    await audit(session, "INVENTORY.PRODUCT_UPDATED", { entity: "Product", entityId: id, metadata: { name: product.name }, req });
+    await audit(session, "INVENTORY.PRODUCT_UPDATED", { entity: "Product", entityId: id, metadata: { name: product!.name }, req });
     return apiOk({ product });
   }, locale);
 }
@@ -94,13 +98,13 @@ export async function DELETE(req: NextRequest) {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return apiError(t("api.missingId"), 400);
 
-    const product = await prisma.product.findFirst({ where: { id, companyId: session.company.id } });
+    const [product] = await db.select().from(productTable).where(and(eq(productTable.id, id), eq(productTable.companyId, session.company.id))).limit(1);
     if (!product) return apiError(t("api.productNotFound"), 404);
 
-    const saleItems = await prisma.saleItem.count({ where: { productId: id } });
-    if (saleItems > 0) return apiError(t("api.productInUse"), 400);
+    const [saleItemsCount] = await db.select({ c: count() }).from(saleItemTable).where(eq(saleItemTable.productId, id));
+    if (Number(saleItemsCount?.c ?? 0) > 0) return apiError(t("api.productInUse"), 400);
 
-    await prisma.product.delete({ where: { id } });
+    await db.delete(productTable).where(eq(productTable.id, id));
     await audit(session, "INVENTORY.PRODUCT_DELETED", { entity: "Product", entityId: id, metadata: { name: product.name }, req });
     return apiOk({ success: true });
   }, locale);

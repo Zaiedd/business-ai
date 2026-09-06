@@ -5,6 +5,39 @@
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-cairo: var(--font-cairo), ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-indigo-50: #eff6ff;
+  --color-indigo-100: #dbeafe;
+  --color-indigo-200: #bfdbfe;
+  --color-indigo-300: #93c5fd;
+  --color-indigo-400: #60a5fa;
+  --color-indigo-500: #3b82f6;
+  --color-indigo-600: #2563eb;
+  --color-indigo-700: #1d4ed8;
+  --color-indigo-800: #1e40af;
+  --color-indigo-900: #1e3a8a;
+  --color-indigo-950: #172554;
+
+  --color-violet-50: #eef3ff;
+  --color-violet-100: #dbe6ff;
+  --color-violet-300: #94b3ff;
+  --color-violet-400: #5f8bfc;
+  --color-violet-500: #2f62ee;
+  --color-violet-600: #1e40af;
+  --color-violet-700: #17318c;
+  --color-violet-900: #0f1f4f;
+  --color-violet-950: #0b1736;
+
+  --color-purple-50: #eef4ff;
+  --color-purple-300: #8fabff;
+  --color-purple-400: #5d83f7;
+  --color-purple-500: #2f5ce0;
+  --color-purple-600: #1c3d99;
+  --color-purple-700: #16327f;
+  --color-purple-950: #0b1736;
+
+  --color-pink-400: #38bdf8;
+  --color-pink-600: #0284c7;
 }
 
 html {
@@ -69,4 +102,23 @@ html.theme-transition *::after {
 }
 .dark .recharts-tooltip-wrapper {
   filter: none;
+}
+
+/* Print: report pages only */
+@media print {
+  aside,
+  header,
+  .no-print,
+  .print-hidden {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  body {
+    background: #ffffff !important;
+  }
+  .print-area {
+    box-shadow: none !important;
+  }
 }

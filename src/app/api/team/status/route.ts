@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { eq } from "drizzle-orm";
+import { db, cuid } from "@/lib/db";
+import { user as userTable, company as companyTable } from "@/lib/drizzle/schema";
 import { writeAudit } from "@/lib/auth";
 import { apiError, apiOk, handleZod, requireAdmin, requireSession, runApi } from "@/lib/api";
 import { updateStatusSchema } from "@/lib/validators";
@@ -26,10 +28,10 @@ export async function PATCH(req: NextRequest) {
       return apiError(t("api.cannotDisableSelf"), 400);
     }
 
-    const target = await prisma.user.findFirst({ where: { id: userId, companyId: session.company.id } });
+    const [target] = await db.select({ id: userTable.id }).from(userTable).where(eq(userTable.id, userId)).limit(1);
     if (!target) return apiError(t("api.userNotFound"), 404);
 
-    const updated = await prisma.user.update({ where: { id: userId }, data: { status }, select: { id: true, status: true } });
+    const [updated] = await db.update(userTable).set({ status }).where(eq(userTable.id, userId)).returning({ id: userTable.id, status: userTable.status });
     await writeAudit({
       action: status === "DISABLED" ? "TEAM.USER_DISABLED" : "TEAM.USER_ENABLED",
       companyId: session.company.id,

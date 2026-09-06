@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { user as userTable } from "@/lib/drizzle/schema";
 import { apiOk, apiError, requireSession, runApi } from "@/lib/api";
 import { isLocale } from "@/lib/i18n";
 import { getLocaleFromRequest, serverT } from "@/lib/i18n/server";
@@ -18,7 +20,7 @@ export async function POST(req: NextRequest) {
     if (!isLocale(newLocale)) return apiError(t("api.invalidLocale"), 400);
 
     const session = await requireSession(req);
-    await prisma.user.update({ where: { id: session.user.id }, data: { locale: newLocale } });
+    await db.update(userTable).set({ locale: newLocale }).where(eq(userTable.id, session.user.id));
     return apiOk({ locale: newLocale });
   }, locale);
 }

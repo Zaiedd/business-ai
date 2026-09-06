@@ -35,7 +35,7 @@ const EXT_COLORS: Record<string, string> = {
   docx: "bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-300",
 };
 
-function formatSize(bytes: number): string {
+function formatSize(bytes: number, locale: string = "en"): string {
   const units = ["B", "KB", "MB", "GB"];
   let n = bytes;
   let i = 0;
@@ -43,11 +43,11 @@ function formatSize(bytes: number): string {
     n /= 1024;
     i++;
   }
-  return `${n.toLocaleString(undefined, { maximumFractionDigits: n >= 100 || i === 0 ? 0 : 1 })} ${units[i]}`;
+  return `${n.toLocaleString(locale === "ar" ? "ar-EG" : "en-US", { maximumFractionDigits: n >= 100 || i === 0 ? 0 : 1 })} ${units[i]}`;
 }
 
 export default function CompanyFiles() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<CompanyFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -160,7 +160,7 @@ export default function CompanyFiles() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{f.originalName}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {formatSize(f.size)} · {new Date(f.createdAt).toLocaleDateString()}
+                      {formatSize(f.size, locale)} · {new Date(f.createdAt).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-US")}
                       {f.uploadedBy?.name ? ` · ${t("companyFiles.uploadedBy", { name: f.uploadedBy.name })}` : ""}
                     </p>
                   </div>

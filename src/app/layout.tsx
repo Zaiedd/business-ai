@@ -3,7 +3,8 @@ import { Inter, Cairo } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { I18nProvider } from "@/components/i18n-provider";
-import { getServerLocale } from "@/lib/i18n/server";
+import { Providers } from "@/components/providers";
+import { getServerLocale, serverT } from "@/lib/i18n/server";
 import { getLocaleDir } from "@/lib/i18n";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -15,15 +16,13 @@ const cairo = Cairo({
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getServerLocale();
+  const t = serverT(locale);
   return {
     title: {
-      default: "Business AI — AI Business Intelligence",
-      template: "%s · Business AI",
+      default: t("app.title"),
+      template: t("app.template"),
     },
-    description:
-      locale === "ar"
-        ? "منصة SaaS مدعومة بالذكاء الاصطناعي تحلل بيانات أعمالك وتتنبأ بالاتجاهات وتعمل كمستشار أعمال ذكي."
-        : "AI-powered SaaS platform that analyzes your business data, predicts trends, and acts as your AI business consultant.",
+    description: t("app.description"),
   };
 }
 
@@ -38,9 +37,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className={`${inter.variable} ${cairo.variable} font-sans`}>
-        <I18nProvider locale={locale}>
-          <ThemeProvider>{children}</ThemeProvider>
-        </I18nProvider>
+        <Providers>
+          <I18nProvider locale={locale}>
+            <ThemeProvider>{children}</ThemeProvider>
+          </I18nProvider>
+        </Providers>
       </body>
     </html>
   );

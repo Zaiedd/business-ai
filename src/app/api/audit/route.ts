@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { eq, and, desc, count } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { auditLog as auditLogTable, user as userTable } from "@/lib/drizzle/schema";
 import { apiOk, requireAdmin, requireSession, runApi } from "@/lib/api";
 
 export async function GET(req: NextRequest) {
@@ -7,21 +9,23 @@ export async function GET(req: NextRequest) {
     const session = await requireSession(req);
     requireAdmin(session);
 
-    const logs = await prisma.auditLog.findMany({
-      where: { companyId: session.company.id },
-      orderBy: { createdAt: "desc" },
-      take: 60,
-      select: {
-        id: true,
-        action: true,
-        entity: true,
-        entityId: true,
-        metadata: true,
-        ip: true,
-        createdAt: true,
-        user: { select: { name: true, email: true } },
-      },
-    });
+    const logs = await db
+      .select({
+        id: auditLogTable.id,
+        action: auditLogTable.action,
+        entity: auditLogTable.entity,
+        entityId: auditLogTable.entityId,
+        metadata: auditLogTable.metadata,
+        ip: auditLogTable.ip,
+        createdAt: auditLogTable.createdAt,
+        user: { name: userTable.name, email: userTable.email },
+      })
+      .from(auditLogTable)
+      .leftJoin(userTable, eq(auditLogTable.userId, userTable.id))
+      .where(eq(auditLogTable.companyId, session.company.id))
+      .orderBy(desc(auditLogTable.createdAt))
+      .limit(60);
+
     return apiOk({ logs });
   });
 }

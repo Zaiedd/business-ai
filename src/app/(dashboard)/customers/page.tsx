@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/components/i18n-provider";
+import { useToast } from "@/components/ui/toast";
 
 interface Customer {
   id: string;
@@ -27,7 +28,8 @@ const emptyForm = { name: "", email: "", phone: "", segment: "" };
 const SEGMENTS = ["VIP", "REGULAR", "NEW"];
 
 export default function CustomersPage() {
-  const { t } = useI18n();
+  const { toast } = useToast();
+  const { t, locale } = useI18n();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [currency, setCurrency] = useState("USD");
   const [loading, setLoading] = useState(true);
@@ -109,7 +111,7 @@ export default function CustomersPage() {
     const res = await fetch(`/api/customers?id=${c.id}`, { method: "DELETE" });
     const body = await res.json();
     if (!res.ok) {
-      alert(body.error ?? t("customers.deleteFailed"));
+      toast(body.error ?? t("customers.deleteFailed"), "error");
       return;
     }
     load();
@@ -184,23 +186,23 @@ export default function CustomersPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
-                  <th className="py-2 pr-4 font-semibold">{t("customers.name")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("customers.segment")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("customers.totalOrders")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("customers.totalSpent")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("customers.lastPurchase")}</th>
+                <tr className="border-b border-slate-100 text-start text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                  <th className="py-2 pe-4 font-semibold">{t("customers.name")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("customers.segment")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("customers.totalOrders")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("customers.totalSpent")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("customers.lastPurchase")}</th>
                   <th className="py-2 text-end font-semibold">{t("customers.actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
                 {filtered.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pe-4">
                       <div className="font-medium text-slate-900 dark:text-slate-100">{c.name}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400">{c.email ?? c.phone ?? "—"}</div>
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pe-4">
                       {c.segment ? (
                         <Badge variant={c.segment === "VIP" ? "brand" : c.segment === "NEW" ? "info" : "neutral"}>
                           {t(`customers.segments.${c.segment}` as never)}
@@ -209,9 +211,9 @@ export default function CustomersPage() {
                         "—"
                       )}
                     </td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-400">{formatNumber(c.totalOrders)}</td>
-                    <td className="py-3 pr-4 font-medium text-slate-900 dark:text-slate-100">{formatCurrency(c.totalSpent, currency)}</td>
-                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{c.lastPurchaseAt ? formatDate(c.lastPurchaseAt) : t("customers.never")}</td>
+                    <td className="py-3 pe-4 text-slate-600 dark:text-slate-400">{formatNumber(c.totalOrders, 0, locale)}</td>
+                    <td className="py-3 pe-4 font-medium text-slate-900 dark:text-slate-100">{formatCurrency(c.totalSpent, currency, false, locale)}</td>
+                    <td className="py-3 pe-4 text-slate-500 dark:text-slate-400">{c.lastPurchaseAt ? formatDate(c.lastPurchaseAt, locale) : t("customers.never")}</td>
                     <td className="py-3 text-end">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openEdit(c)} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/50" title={t("common.edit")}>

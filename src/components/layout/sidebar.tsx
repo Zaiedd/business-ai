@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import { LogOut, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/logo";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useI18n } from "@/components/i18n-provider";
-import type { Role } from "@prisma/client";
+import type { Role } from "@/lib/auth";
 import { NAV_ITEMS } from "@/components/layout/nav-items";
 
 interface SidebarProps {
@@ -37,30 +38,41 @@ export function Sidebar({ userName, userEmail, role, companyName }: SidebarProps
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
         <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{t("nav.workspace")}</div>
-        {items.map((item) => {
+        {items.map((item, i) => {
           const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
           return (
-            <Link
+            <motion.div
               key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                active ? "bg-indigo-600 text-white" : "text-slate-300 hover:bg-white/5 hover:text-white",
-              )}
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.04, duration: 0.25, ease: "easeOut" }}
             >
-              <item.icon className="size-4.5" />
-              {t(item.labelKey)}
-            </Link>
+              <Link
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  active ? "bg-indigo-600 text-white" : "text-slate-300 hover:bg-white/5 hover:text-white",
+                )}
+              >
+                <item.icon className="size-4.5" />
+                {t(item.labelKey)}
+              </Link>
+            </motion.div>
           );
         })}
 
-        <div className="mt-6 rounded-xl border border-white/10 bg-gradient-to-br from-indigo-500/15 to-violet-500/15 p-3">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: items.length * 0.04 + 0.1, duration: 0.3 }}
+          className="mt-6 rounded-xl border border-white/10 bg-gradient-to-br from-indigo-500/15 to-violet-500/15 p-3"
+        >
           <div className="flex items-center gap-2 text-xs font-semibold text-white">
             <Sparkles className="size-3.5 text-indigo-400" />
             {t("nav.aiEngine")}
           </div>
           <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{t("nav.aiTagline", { company: companyName })}</p>
-        </div>
+        </motion.div>
       </nav>
 
       <div className="border-t border-white/5 p-3">
@@ -80,6 +92,9 @@ export function Sidebar({ userName, userEmail, role, companyName }: SidebarProps
             <LogOut className="size-4" />
           </button>
         </div>
+        <p className="mt-2 text-center text-[10px] text-slate-500">
+          © {new Date().getFullYear()} Business AI · <span className="font-semibold text-slate-400">By Zaiedd</span>
+        </p>
       </div>
     </aside>
   );

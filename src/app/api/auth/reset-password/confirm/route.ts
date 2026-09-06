@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { user as userTable } from "@/lib/drizzle/schema";
 import { consumeVerificationToken, hashPassword, writeAudit } from "@/lib/auth";
-import { prisma } from "@/lib/db";
 import { apiOk, apiError, handleZod, runApi } from "@/lib/api";
 import { resetPasswordSchema } from "@/lib/validators";
 import { getLocaleFromRequest, serverT } from "@/lib/i18n/server";
@@ -21,11 +23,11 @@ export async function POST(req: NextRequest) {
     const userId = await consumeVerificationToken(parsed.data.token, "PASSWORD_RESET");
     if (!userId) return apiError(t("api.resetLinkInvalid"), 400, "INVALID_TOKEN");
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return apiError(t("api.accountNotFound"), 404);
+    const [userRow] = await db.select().from(userTable).where(eq(userTable.id, userId)).limit(1);
+    if (!userRow) return apiError(t("api.accountNotFound"), 404);
 
-    await prisma.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(parsed.data.password) } });
-    await writeAudit({ action: "AUTH.PASSWORD_RESET", companyId: user.companyId, userId: user.id, req });
+    await db.update(userTable).set({ passwordHash: await hashPassword(parsed.data.password) }).where(eq(userTable.id, userId));
+    await writeAudit({ action: "AUTH.PASSWORD_RESET", companyId: userRow.companyId, userId: userRow.id, req });
     return apiOk({ success: true });
   }, locale);
 }

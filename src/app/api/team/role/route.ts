@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { eq, and } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { user as userTable } from "@/lib/drizzle/schema";
 import { writeAudit } from "@/lib/auth";
 import { apiError, apiOk, handleZod, requireAdmin, requireSession, runApi } from "@/lib/api";
 import { updateRoleSchema } from "@/lib/validators";
@@ -27,14 +29,14 @@ export async function PATCH(req: NextRequest) {
       return apiError(t("api.cannotChangeOwnRole"), 400);
     }
 
-    const target = await prisma.user.findFirst({ where: { id: userId, companyId: session.company.id } });
+    const [target] = await db.select().from(userTable).where(and(eq(userTable.id, userId), eq(userTable.companyId, session.company.id))).limit(1);
     if (!target) return apiError(t("api.userNotFound"), 404);
 
     if (!canManageUsers(session.user.role, target.role) || !canManageUsers(session.user.role, role)) {
       return apiError(t("api.cannotChangeRole"), 403);
     }
 
-    const updated = await prisma.user.update({ where: { id: userId }, data: { role }, select: { id: true, role: true } });
+    const [updated] = await db.update(userTable).set({ role }).where(eq(userTable.id, userId)).returning({ id: userTable.id, role: userTable.role });
     await writeAudit({
       action: "TEAM.ROLE_CHANGED",
       companyId: session.company.id,

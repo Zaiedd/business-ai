@@ -1,12 +1,14 @@
 import type { NextRequest } from "next/server";
+import { eq } from "drizzle-orm";
+import { db, cuid } from "@/lib/db";
+import { companyFile } from "@/lib/drizzle/schema";
 import { apiError, apiOk, audit, requireSession, runApi } from "@/lib/api";
 import { getLocaleFromRequest, serverT } from "@/lib/i18n/server";
-import { prisma } from "@/lib/db";
 import {
   MAX_FILE_BYTES,
   buildStoredName,
+  fileToBase64,
   safeOriginalName,
-  storeUploadedFile,
 } from "@/server/company-files";
 import {
   analyzeFileData,
@@ -54,24 +56,23 @@ export async function POST(req: NextRequest) {
     }
 
     const storedName = buildStoredName(originalName);
-    await storeUploadedFile(session.company.id, storedName, buf);
 
     const analysis = analyzed ? [analyzed.narrative, ...analyzed.bullets].join("\n") : null;
-    const record = await prisma.companyFile.create({
-      data: {
-        companyId: session.company.id,
-        uploadedById: session.user.id,
-        originalName,
-        storedName,
-        mimeType: file.type || "application/octet-stream",
-        ext,
-        size: file.size,
-        analysis,
-      },
-      select: { id: true },
+    const fileId = cuid();
+    await db.insert(companyFile).values({
+      id: fileId,
+      companyId: session.company.id,
+      uploadedById: session.user.id,
+      originalName,
+      storedName,
+      mimeType: file.type || "application/octet-stream",
+      ext,
+      size: file.size,
+      analysis,
+      data: fileToBase64(buf),
     });
 
-    await audit(session, "FILE.UPLOADED", { entity: "company-file", entityId: record.id, metadata: { name: originalName, size: file.size, ext }, req });
+    await audit(session, "FILE.UPLOADED", { entity: "company-file", entityId: fileId, metadata: { name: originalName, size: file.size, ext }, req });
 
     const stats = parsed && parsed.rows.length >= 2 ? analyzeRows(parsed.rows) : null;
 
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
       bullets: analyzed?.bullets ?? [],
       engine: analyzed?.engine ?? "none",
       saved: true,
-      savedFileId: record.id,
+      savedFileId: fileId,
       analyzable: Boolean(analyzed),
     });
   }, locale);

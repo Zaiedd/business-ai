@@ -52,17 +52,25 @@ export function formatTime(date: Date | string, locale: string = "en"): string {
   return d.toLocaleTimeString(locale === "ar" ? "ar-EG" : "en-US");
 }
 
-export function formatCurrency(value: number, currency = "USD", compact = false, _locale: string = "en"): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    notation: compact ? "compact" : "standard",
-    maximumFractionDigits: compact ? 1 : 2,
-  }).format(value ?? 0);
+const intlLocale = (locale: string) => (locale === "ar" ? "ar-EG" : "en-US");
+
+export function stripBidi(value: string): string {
+  return value.replace(/[\u200e\u200f\u061c\u202a-\u202e\u2066-\u2069]/g, "");
 }
 
-export function formatNumber(value: number, digits = 0, _locale: string = "en"): string {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: digits }).format(value ?? 0);
+export function formatCurrency(value: number, currency = "USD", compact = false, locale: string = "en"): string {
+  return stripBidi(
+    new Intl.NumberFormat(intlLocale(locale), {
+      style: "currency",
+      currency,
+      notation: compact ? "compact" : "standard",
+      maximumFractionDigits: compact ? 1 : 2,
+    }).format(value ?? 0),
+  );
+}
+
+export function formatNumber(value: number, digits = 0, locale: string = "en"): string {
+  return stripBidi(new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: digits }).format(value ?? 0));
 }
 
 export function formatPercent(value: number, digits = 1): string {

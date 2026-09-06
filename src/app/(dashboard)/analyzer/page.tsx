@@ -37,12 +37,13 @@ interface AnalysisResult {
 
 const TYPE_KEYS = { number: "analyzer.typeNumber", date: "analyzer.typeDate", boolean: "analyzer.typeBoolean", text: "analyzer.typeText" } as const;
 
-function formatNumber(n: number): string {
-  return Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+function formatNumber(n: number, locale: string = "en"): string {
+  const l = locale === "ar" ? "ar-EG" : "en-US";
+  return Number.isInteger(n) ? n.toLocaleString(l) : n.toLocaleString(l, { maximumFractionDigits: 2 });
 }
 
 export default function AnalyzerPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -193,11 +194,11 @@ export default function AnalyzerPage() {
                   </div>
                   <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                     <p className="text-xs text-slate-500 dark:text-slate-400">{t("analyzer.rows")}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatNumber(result.rows)}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatNumber(result.rows, locale)}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                     <p className="text-xs text-slate-500 dark:text-slate-400">{t("analyzer.cols")}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatNumber(result.cols)}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatNumber(result.cols, locale)}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                     <p className="text-xs text-slate-500 dark:text-slate-400">{t("analyzer.analysisTitle")}</p>
@@ -238,7 +239,7 @@ export default function AnalyzerPage() {
             <CardHeader title={t("analyzer.columnTitle")} />
             <CardBody className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="w-full text-start text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-400">
                       <th className="px-4 py-2.5 font-semibold">{t("analyzer.colName")}</th>
@@ -257,13 +258,13 @@ export default function AnalyzerPage() {
                       <tr key={c.name} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
                         <td className="px-4 py-2.5 font-medium text-slate-900 dark:text-slate-100">{c.name}</td>
                         <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{t(TYPE_KEYS[c.type])}</td>
-                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{formatNumber(c.nonEmpty)}</td>
-                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{formatNumber(c.missing)}</td>
-                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{c.sum !== undefined ? formatNumber(c.sum) : "—"}</td>
-                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{c.avg !== undefined ? formatNumber(c.avg) : "—"}</td>
-                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{c.min !== undefined ? formatNumber(Number(c.min)) : "—"}</td>
-                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{c.max !== undefined ? formatNumber(Number(c.max)) : "—"}</td>
-                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{c.unique !== undefined ? formatNumber(c.unique) : "—"}</td>
+                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{formatNumber(c.nonEmpty, locale)}</td>
+                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{formatNumber(c.missing, locale)}</td>
+                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{c.sum !== undefined ? formatNumber(c.sum, locale) : "—"}</td>
+                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{c.avg !== undefined ? formatNumber(c.avg, locale) : "—"}</td>
+                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{c.min !== undefined ? formatNumber(Number(c.min), locale) : "—"}</td>
+                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{c.max !== undefined ? formatNumber(Number(c.max), locale) : "—"}</td>
+                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{c.unique !== undefined ? formatNumber(c.unique, locale) : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -276,7 +277,7 @@ export default function AnalyzerPage() {
             <CardHeader title={t("analyzer.previewTitle")} />
             <CardBody className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-start text-xs">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
                       {result.preview[0].map((h, i) => (

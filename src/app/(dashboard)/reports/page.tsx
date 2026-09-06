@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Download } from "lucide-react";
+import { AlertCircle, ArrowRight, Download, FileText, History } from "lucide-react";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/components/i18n-provider";
+import { useToast } from "@/components/ui/toast";
 
 const TYPES = ["sales", "expenses", "products", "customers", "branches", "employees"] as const;
 const RANGES = ["7d", "30d", "90d", "12m"] as const;
@@ -27,13 +28,15 @@ interface Bundle {
 }
 
 export default function ReportsPage() {
-  const { t } = useI18n();
+  const { toast } = useToast();
+  const { t, locale } = useI18n();
   const [type, setType] = useState<(typeof TYPES)[number]>("sales");
   const [range, setRange] = useState<(typeof RANGES)[number]>("30d");
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [currency, setCurrency] = useState("USD");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,15 +60,34 @@ export default function ReportsPage() {
 
   function renderCell(format: CellFormat, value: unknown, index: number) {
     if (value === null || value === "") return "—";
-    if (format === "currency") return formatCurrency(Number(value), currency);
-    if (format === "number") return formatNumber(Number(value));
+    if (format === "currency") return formatCurrency(Number(value), currency, false, locale);
+    if (format === "number") return formatNumber(Number(value), 0, locale);
     if (format === "date") return String(value);
     if (index === 0) return <span className="font-medium text-slate-900 dark:text-slate-100">{String(value)}</span>;
     return String(value);
   }
 
-  function exportCsv() {
-    window.location.href = `/api/reports/csv?type=${type}&range=${range}`;
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/reports/csv?type=${type}&range=${range}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast(body.error ?? "Export failed", "error");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${type}-${range}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast("Export failed", "error");
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -75,10 +97,50 @@ export default function ReportsPage() {
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{t("reports.title")}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">{t("reports.subtitle")}</p>
         </div>
-        <Button onClick={exportCsv}>
+        <Button onClick={exportCsv} loading={exporting}>
           <Download className="size-4" />
           {t("reports.exportCsv")}
         </Button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <a href="/reports/health" className="group">
+          <Card className="transition-shadow hover:shadow-md">
+            <CardBody className="flex items-start justify-between gap-4 px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+                  <FileText className="size-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t("reports.hub.healthTitle")}</p>
+                  <p className="mt-0.5 max-w-sm text-xs leading-relaxed text-slate-500 dark:text-slate-400">{t("reports.hub.healthDesc")}</p>
+                  <p className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 group-hover:underline dark:text-indigo-400">
+                    {t("reports.hub.open")} <ArrowRight className="size-3 rtl:rotate-180" />
+                  </p>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        </a>
+
+        <a href="/reports/history" className="group">
+          <Card className="transition-shadow hover:shadow-md">
+            <CardBody className="flex items-start justify-between gap-4 px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-800 text-white dark:bg-slate-700">
+                  <History className="size-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t("reports.hub.historyTitle")}</p>
+                  <p className="mt-0.5 max-w-sm text-xs leading-relaxed text-slate-500 dark:text-slate-400">{t("reports.hub.historyDesc")}</p>
+                  <p className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 group-hover:underline dark:text-indigo-400">
+                    {t("reports.hub.open")} <ArrowRight className="size-3 rtl:rotate-180" />
+                  </p>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        </a>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -141,9 +203,9 @@ export default function ReportsPage() {
               ) : (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                    <tr className="border-b border-slate-100 text-start text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
                       {bundle.headers.map((h, i) => (
-                        <th key={i} className="py-2 pr-4 font-semibold">{h}</th>
+                        <th key={i} className="py-2 pe-4 font-semibold">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -151,7 +213,7 @@ export default function ReportsPage() {
                     {bundle.rows.slice(0, 100).map((row, r) => (
                       <tr key={r} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                         {row.map((cell, c) => (
-                          <td key={c} className="py-3 pr-4 text-slate-600 dark:text-slate-400">
+                          <td key={c} className="py-3 pe-4 text-slate-600 dark:text-slate-400">
                             {renderCell(bundle.formats[c] ?? "text", cell, c)}
                           </td>
                         ))}

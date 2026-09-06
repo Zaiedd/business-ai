@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/components/i18n-provider";
+import { useToast } from "@/components/ui/toast";
 
 interface SaleItem {
   id: string;
@@ -60,7 +61,8 @@ interface FormRow {
 const STATUSES = ["COMPLETED", "PENDING", "REFUNDED"] as const;
 
 export default function SalesPage() {
-  const { t } = useI18n();
+  const { toast } = useToast();
+  const { t, locale } = useI18n();
   const [sales, setSales] = useState<Sale[]>([]);
   const [currency, setCurrency] = useState("USD");
   const [taxRate, setTaxRate] = useState(0);
@@ -189,7 +191,7 @@ export default function SalesPage() {
     });
     const body = await res.json();
     if (!res.ok) {
-      alert(body.error ?? t("sales.updateFailed"));
+      toast(body.error ?? t("sales.updateFailed"), "error");
       setUpdatingId(null);
       return;
     }
@@ -203,7 +205,7 @@ export default function SalesPage() {
     const res = await fetch(`/api/sales?id=${sale.id}`, { method: "DELETE" });
     const body = await res.json();
     if (!res.ok) {
-      alert(body.error ?? t("sales.deleteFailed"));
+      toast(body.error ?? t("sales.deleteFailed"), "error");
       return;
     }
     load();
@@ -269,7 +271,7 @@ export default function SalesPage() {
                 ) : (
                   <div className="space-y-2">
                     {rows.map((row, index) => (
-                      <div key={index} className="grid grid-cols-[1fr_5rem_8rem_8rem_2rem] items-center gap-2">
+                      <div key={index} className="grid grid-cols-[1fr_4rem_6rem_6rem_2rem] items-center gap-2 sm:grid-cols-[1fr_5rem_8rem_8rem_2rem]">
                         <Select
                           options={products.map((p) => ({ value: p.id, label: `${p.name} · ${t("sales.stock", { stock: String(p.stockQty) })}` }))}
                           value={row.productId}
@@ -278,7 +280,7 @@ export default function SalesPage() {
                         <Input type="number" min={1} step={1} required value={row.qty} onChange={(e) => setRow(index, { qty: e.target.value })} />
                         <Input type="number" min={0} step="0.01" required value={row.unitPrice} onChange={(e) => setRow(index, { unitPrice: e.target.value })} />
                         <div className="flex items-center justify-end text-sm font-medium text-slate-700 dark:text-slate-300">
-                          {formatCurrency(round2(safeParseFloat(row.qty) * safeParseFloat(row.unitPrice)), currency)}
+                          {formatCurrency(round2(safeParseFloat(row.qty) * safeParseFloat(row.unitPrice)), currency, false, locale)}
                         </div>
                         <button
                           type="button"
@@ -300,16 +302,16 @@ export default function SalesPage() {
                   <div className="space-y-1">
                     <p className="flex justify-between gap-8 text-slate-500 dark:text-slate-400">
                       <span>{t("sales.subtotal")}</span>
-                      <span className="font-medium text-slate-900 dark:text-slate-100">{formatCurrency(subtotal, currency)}</span>
+                      <span className="font-medium text-slate-900 dark:text-slate-100">{formatCurrency(subtotal, currency, false, locale)}</span>
                     </p>
                     <p className="flex justify-between gap-8 text-slate-500 dark:text-slate-400">
                       <span>{t("sales.tax")} ({(taxRate * 100).toFixed(0)}%)</span>
-                      <span className="font-medium text-slate-900 dark:text-slate-100">{formatCurrency(tax, currency)}</span>
+                      <span className="font-medium text-slate-900 dark:text-slate-100">{formatCurrency(tax, currency, false, locale)}</span>
                     </p>
                   </div>
                   <div className="text-end">
                     <p className="text-xs uppercase tracking-wide text-slate-400">{t("sales.total")}</p>
-                    <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{formatCurrency(total, currency)}</p>
+                    <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{formatCurrency(total, currency, false, locale)}</p>
                   </div>
                 </div>
               </div>
@@ -329,7 +331,7 @@ export default function SalesPage() {
       <Card>
         <CardHeader
           title={t("sales.title")}
-          subtitle={sales.length === 1 ? t("sales.salesCount", { count: String(sales.length) }) : t("sales.salesCount", { count: String(sales.length) })}
+          subtitle={sales.length === 1 ? t("sales.saleCount", { count: String(sales.length) }) : t("sales.salesCount", { count: String(sales.length) })}
         />
         <CardBody className="-mx-5 overflow-x-auto px-5">
           {loading ? (
@@ -343,29 +345,29 @@ export default function SalesPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
-                  <th className="py-2 pr-4 font-semibold">{t("sales.invoice")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("sales.date")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("sales.customer")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("sales.branch")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("sales.employee")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("sales.items")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("sales.total")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("sales.status")}</th>
+                <tr className="border-b border-slate-100 text-start text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                  <th className="py-2 pe-4 font-semibold">{t("sales.invoice")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("sales.date")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("sales.customer")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("sales.branch")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("sales.employee")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("sales.items")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("sales.total")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("sales.status")}</th>
                   <th className="py-2 text-end font-semibold">{t("sales.actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
                 {sales.map((s) => (
                   <tr key={s.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                    <td className="py-3 pr-4 font-medium text-slate-900 dark:text-slate-100">{s.invoiceNo}</td>
-                    <td className="py-3 pr-4 text-slate-500 dark:text-slate-400">{formatDate(s.date)}</td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-400">{s.customer?.name ?? "—"}</td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-400">{s.branch?.name ?? "—"}</td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-400">{s.user?.name ?? "—"}</td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-400">{t("sales.itemsCount", { count: String(s.items.length) })}</td>
-                    <td className="py-3 pr-4 font-medium text-slate-900 dark:text-slate-100">{formatCurrency(s.total, currency)}</td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pe-4 font-medium text-slate-900 dark:text-slate-100">{s.invoiceNo}</td>
+                    <td className="py-3 pe-4 text-slate-500 dark:text-slate-400">{formatDate(s.date, locale)}</td>
+                    <td className="py-3 pe-4 text-slate-600 dark:text-slate-400">{s.customer?.name ?? "—"}</td>
+                    <td className="py-3 pe-4 text-slate-600 dark:text-slate-400">{s.branch?.name ?? "—"}</td>
+                    <td className="py-3 pe-4 text-slate-600 dark:text-slate-400">{s.user?.name ?? "—"}</td>
+                    <td className="py-3 pe-4 text-slate-600 dark:text-slate-400">{t("sales.itemsCount", { count: String(s.items.length) })}</td>
+                    <td className="py-3 pe-4 font-medium text-slate-900 dark:text-slate-100">{formatCurrency(s.total, currency, false, locale)}</td>
+                    <td className="py-3 pe-4">
                       <select
                         value={s.status}
                         disabled={updatingId === s.id}

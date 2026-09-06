@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { user as userTable } from "@/lib/drizzle/schema";
 import { createVerificationToken, getRequestMeta } from "@/lib/auth";
 import { apiOk, apiError, handleZod, runApi } from "@/lib/api";
 import { forgotPasswordSchema } from "@/lib/validators";
@@ -25,19 +27,17 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) return handleZod(parsed.error, locale);
     const { email } = parsed.data;
 
-    const user = await prisma.user.findFirst({ where: { email: email.toLowerCase().trim() } });
-    if (user) {
-      const token = await createVerificationToken(user.id, "PASSWORD_RESET");
-      const origin = req.headers.get("origin") ?? "http://localhost:3000";
+    const [userRow] = await db.select().from(userTable).where(eq(userTable.email, email.toLowerCase().trim())).limit(1);
+    if (userRow) {
+      const token = await createVerificationToken(userRow.id, "PASSWORD_RESET");
+      const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://business-ai.zaiedd.workers.dev";
       const link = `${origin}/reset-password?token=${token}`;
-      await sendEmail(resetPasswordEmail(user.email, link));
-      // Echo the link in dev so the flow works without SMTP.
+      await sendEmail(resetPasswordEmail(userRow.email, link, locale));
       if (process.env.NODE_ENV !== "production") {
         return apiOk({ sent: true, devResetLink: link });
       }
     }
 
-    // Always return the same shape to avoid leaking whether an account exists.
     return apiOk({ sent: true });
   }, locale);
 }

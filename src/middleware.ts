@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session-token";
 
-const PUBLIC_PAGES = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"];
+const PUBLIC_PAGES = ["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email"];
 const ADMIN_PAGES = ["/team", "/settings", "/activity"];
 
 export async function middleware(req: NextRequest) {

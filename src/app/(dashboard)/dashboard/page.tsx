@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, CircleDollarSign, Coins, PiggyBank, Receipt, RefreshCw, ShoppingBag, TrendingUp } from "lucide-react";
+import { motion } from "framer-motion";
+import { Activity, AlertCircle, CircleDollarSign, Coins, PiggyBank, Receipt, RefreshCw, ShoppingBag, Sparkles, TrendingUp, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber, formatPercent, formatShortDate } from "@/lib/utils";
 import type { DateRange } from "@/lib/validators";
@@ -64,12 +65,12 @@ export default function DashboardPage() {
   const kpis = useMemo(() => {
     if (!cur || !prev) return [];
     return [
-      { label: t("dashboard.kpis.revenue"), value: formatCurrency(cur.revenue, currency, true), delta: data!.overview.deltas.revenue, positiveIsGood: true, icon: CircleDollarSign, accent: "indigo" as const },
-      { label: t("dashboard.kpis.grossProfit"), value: formatCurrency(cur.grossProfit, currency, true), delta: pct(cur.grossProfit, prev.grossProfit), positiveIsGood: true, icon: PiggyBank, accent: "violet" as const },
-      { label: t("dashboard.kpis.netProfit"), value: formatCurrency(cur.netProfit, currency, true), delta: data!.overview.deltas.netProfit, positiveIsGood: true, icon: TrendingUp, accent: "emerald" as const },
-      { label: t("dashboard.kpis.cashFlow"), value: formatCurrency(cur.cashFlow, currency, true), delta: pct(cur.cashFlow, prev.cashFlow), positiveIsGood: true, icon: Coins, accent: "amber" as const },
-      { label: t("dashboard.kpis.orders"), value: formatNumber(cur.orders), delta: data!.overview.deltas.orders, positiveIsGood: true, icon: Receipt, accent: "rose" as const },
-      { label: t("dashboard.kpis.avgOrderValue"), value: formatCurrency(cur.avgOrderValue, currency), delta: pct(cur.avgOrderValue, prev.avgOrderValue), positiveIsGood: true, icon: ShoppingBag, accent: "indigo" as const },
+      { label: t("dashboard.kpis.revenue"), value: formatCurrency(cur.revenue, currency, true, locale), delta: data!.overview.deltas.revenue, positiveIsGood: true, icon: CircleDollarSign, accent: "indigo" as const },
+      { label: t("dashboard.kpis.grossProfit"), value: formatCurrency(cur.grossProfit, currency, true, locale), delta: pct(cur.grossProfit, prev.grossProfit), positiveIsGood: true, icon: PiggyBank, accent: "violet" as const },
+      { label: t("dashboard.kpis.netProfit"), value: formatCurrency(cur.netProfit, currency, true, locale), delta: data!.overview.deltas.netProfit, positiveIsGood: true, icon: TrendingUp, accent: "emerald" as const },
+      { label: t("dashboard.kpis.cashFlow"), value: formatCurrency(cur.cashFlow, currency, true, locale), delta: pct(cur.cashFlow, prev.cashFlow), positiveIsGood: true, icon: Coins, accent: "amber" as const },
+      { label: t("dashboard.kpis.orders"), value: formatNumber(cur.orders, 0, locale), delta: data!.overview.deltas.orders, positiveIsGood: true, icon: Receipt, accent: "rose" as const },
+      { label: t("dashboard.kpis.avgOrderValue"), value: formatCurrency(cur.avgOrderValue, currency, false, locale), delta: pct(cur.avgOrderValue, prev.avgOrderValue), positiveIsGood: true, icon: ShoppingBag, accent: "indigo" as const },
     ];
   }, [cur, prev, currency, data, t]);
 
@@ -79,7 +80,12 @@ export default function DashboardPage() {
   }, [data, locale]);
 
   return (
-    <div className="space-y-6">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      className="space-y-6"
+    >
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -141,6 +147,31 @@ export default function DashboardPage() {
 
       {data && (
         <>
+          {/* Today + Health banner */}
+          <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-emerald-50 p-5 dark:border-indigo-900/60 dark:from-indigo-950/40 dark:via-slate-900 dark:to-emerald-950/40">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
+                  <Sparkles className="size-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t("dashboard.banner.title")}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{t("dashboard.banner.subtitle")}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <a href="/today" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500">
+                  <Zap className="size-3.5" />
+                  {t("dashboard.banner.todayAction")}
+                </a>
+                <a href="/reports/health" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
+                  <Activity className="size-3.5" />
+                  {t("dashboard.banner.healthAction")}
+                </a>
+              </div>
+            </div>
+          </div>
+
           {/* KPI row */}
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
             {kpis.map((k) => (
@@ -185,7 +216,7 @@ export default function DashboardPage() {
               </CardBody>
             </Card>
             <Card>
-              <CardHeader title={t("dashboard.charts.expensesTitle")} subtitle={t("dashboard.charts.expensesSubtitle", { total: formatCurrency(cur!.expenses, currency) })} />
+              <CardHeader title={t("dashboard.charts.expensesTitle")} subtitle={t("dashboard.charts.expensesSubtitle", { total: formatCurrency(cur!.expenses, currency, false, locale) })} />
               <CardBody>
                 <ExpensePieChart data={data.expenseByCategory} currency={currency} />
               </CardBody>
@@ -224,7 +255,7 @@ export default function DashboardPage() {
                     <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
                       <div className="min-w-0">
                         <p className="truncate font-medium text-slate-900 dark:text-slate-100">{c.name}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{t("dashboard.atRiskMeta", { orders: String(c.totalOrders), spent: formatCurrency(c.totalSpent, currency) })}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t("dashboard.atRiskMeta", { orders: String(c.totalOrders), spent: formatCurrency(c.totalSpent, currency, false, locale) })}</p>
                       </div>
                       <Badge variant="warning">{c.daysInactive}d</Badge>
                     </div>
@@ -242,6 +273,6 @@ export default function DashboardPage() {
           </Card>
         </>
       )}
-    </div>
+    </motion.div>
   );
 }

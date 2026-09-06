@@ -1,4 +1,6 @@
-import { prisma } from "@/lib/db";
+import { eq, and, desc, sql, gte, lte, count } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { sale, saleItem, expense as expenseTable, product as productTable, customer as customerTable, branch as branchTable, user as userTable } from "@/lib/drizzle/schema";
 import { getPeriodTotals, getCustomerStats, rangeToBounds } from "@/server/analytics";
 import { round2, safeParseFloat, safeParseInt, toDateKey } from "@/lib/utils";
 import type { DateRange } from "@/lib/validators";
@@ -27,14 +29,32 @@ export async function getReportBundle(companyId: string, currency: string, type:
   if (type === "sales") {
     const [totals, refundRow] = await Promise.all([
       getPeriodTotals(companyId, from, to),
-      prisma.sale.aggregate({ where: { companyId, status: "REFUNDED", date: { gte: from, lte: to } }, _sum: { total: true } }),
+      db
+        .select({ total: sql<number>`COALESCE(SUM(${sale.total}), 0)` })
+        .from(sale)
+        .where(and(eq(sale.companyId, companyId), eq(sale.status, "REFUNDED"), gte(sale.date, from), lte(sale.date, to))),
     ]);
-    const sales = await prisma.sale.findMany({
-      where: { companyId, date: { gte: from, lte: to } },
-      orderBy: { date: "desc" },
-      include: { branch: { select: { name: true } }, user: { select: { name: true } }, customer: { select: { name: true } } },
-    });
-    const refunds = round2(safeParseFloat(refundRow._sum.total));
+    const sales = await db
+      .select({
+        invoiceNo: sale.invoiceNo,
+        date: sale.date,
+        subtotal: sale.subtotal,
+        discount: sale.discount,
+        tax: sale.tax,
+        total: sale.total,
+        status: sale.status,
+        branchName: branchTable.name,
+        userName: userTable.name,
+        customerName: customerTable.name,
+      })
+      .from(sale)
+      .leftJoin(branchTable, eq(sale.branchId, branchTable.id))
+      .leftJoin(userTable, eq(sale.userId, userTable.id))
+      .leftJoin(customerTable, eq(sale.customerId, customerTable.id))
+      .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to)))
+      .orderBy(desc(sale.date));
+
+    const refunds = round2(safeParseFloat(refundRow[0]?.total));
     return {
       kpis: [
         { key: "revenue", label: t("reports.kpis.revenue"), display: formatMoney(totals.revenue, currency) },
@@ -48,35 +68,45 @@ export async function getReportBundle(companyId: string, currency: string, type:
         t("reports.headers.total"), t("reports.headers.status"),
       ],
       formats: ["text", "date", "text", "text", "text", "currency", "currency", "currency", "currency", "text"],
-      rows: sales.map((s) => [s.invoiceNo, toDateKey(s.date), s.branch?.name ?? "", s.user?.name ?? "", s.customer?.name ?? "", s.subtotal, s.discount, s.tax, s.total, s.status]),
+      rows: sales.map((s) => [s.invoiceNo, toDateKey(s.date), s.branchName ?? "", s.userName ?? "", s.customerName ?? "", s.subtotal, s.discount, s.tax, s.total, s.status]),
     };
   }
 
   if (type === "expenses") {
     const [agg, expenses] = await Promise.all([
-      prisma.expense.aggregate({ where: { companyId, date: { gte: from, lte: to } }, _sum: { amount: true }, _count: { _all: true } }),
-      prisma.expense.findMany({
-        where: { companyId, date: { gte: from, lte: to } },
-        orderBy: { date: "desc" },
-        include: { branch: { select: { name: true } } },
-      }),
+      db
+        .select({ amount: sql<number>`COALESCE(SUM(${expenseTable.amount}), 0)`, cnt: sql<number>`COUNT(*)::int` })
+        .from(expenseTable)
+        .where(and(eq(expenseTable.companyId, companyId), gte(expenseTable.date, from), lte(expenseTable.date, to))),
+      db
+        .select({
+          date: expenseTable.date,
+          category: expenseTable.category,
+          description: expenseTable.description,
+          amount: expenseTable.amount,
+          branchName: branchTable.name,
+        })
+        .from(expenseTable)
+        .leftJoin(branchTable, eq(expenseTable.branchId, branchTable.id))
+        .where(and(eq(expenseTable.companyId, companyId), gte(expenseTable.date, from), lte(expenseTable.date, to)))
+        .orderBy(desc(expenseTable.date)),
     ]);
     return {
       kpis: [
-        { key: "totalExpenses", label: t("reports.kpis.totalExpenses"), display: formatMoney(round2(safeParseFloat(agg._sum.amount)), currency) },
-        { key: "expenseCount", label: t("reports.kpis.expenseCount"), display: String(agg._count._all) },
+        { key: "totalExpenses", label: t("reports.kpis.totalExpenses"), display: formatMoney(round2(safeParseFloat(agg[0]?.amount)), currency) },
+        { key: "expenseCount", label: t("reports.kpis.expenseCount"), display: String(agg[0]?.cnt ?? 0) },
       ],
       headers: [
         t("reports.headers.date"), t("reports.headers.category"), t("reports.headers.description"),
         t("reports.headers.amount"), t("reports.headers.branch"),
       ],
       formats: ["date", "text", "text", "currency", "text"],
-      rows: expenses.map((e) => [toDateKey(e.date), e.category, e.description ?? "", e.amount, e.branch?.name ?? ""]),
+      rows: expenses.map((e) => [toDateKey(e.date), e.category, e.description ?? "", e.amount, e.branchName ?? ""]),
     };
   }
 
   if (type === "products") {
-    const products = await prisma.product.findMany({ where: { companyId }, orderBy: { name: "asc" } });
+    const products = await db.select().from(productTable).where(eq(productTable.companyId, companyId)).orderBy(productTable.name);
     const stockValue = round2(products.reduce((sum, p) => sum + p.stockQty * p.costPrice, 0));
     const lowStock = products.filter((p) => p.stockQty <= p.lowStockThreshold).length;
     return {
@@ -96,7 +126,7 @@ export async function getReportBundle(companyId: string, currency: string, type:
 
   if (type === "customers") {
     const [customers, stats] = await Promise.all([
-      prisma.customer.findMany({ where: { companyId }, orderBy: { totalSpent: "desc" } }),
+      db.select().from(customerTable).where(eq(customerTable.companyId, companyId)).orderBy(desc(customerTable.totalSpent)),
       getCustomerStats(companyId, from, to),
     ]);
     const totalSpent = round2(customers.reduce((sum, c) => sum + c.totalSpent, 0));
@@ -116,12 +146,18 @@ export async function getReportBundle(companyId: string, currency: string, type:
   }
 
   if (type === "branches") {
-    const branches = await prisma.branch.findMany({ where: { companyId } });
-    const perf = await prisma.$queryRaw<Array<{ id: string | null; orders: bigint | number; revenue: number }>>`
-      SELECT b.id as id, COUNT(s.id) as orders, COALESCE(SUM(s.total), 0) as revenue
-      FROM Sale s LEFT JOIN Branch b ON b.id = s.branchId
-      WHERE s.companyId = ${companyId} AND s.date BETWEEN ${from} AND ${to} AND s.status = 'COMPLETED'
-      GROUP BY b.id`;
+    const branches = await db.select().from(branchTable).where(eq(branchTable.companyId, companyId));
+    const perf = await db
+      .select({
+        id: branchTable.id,
+        orders: sql<number>`COUNT(${sale.id})`,
+        revenue: sql<number>`COALESCE(SUM(${sale.total}), 0)`,
+      })
+      .from(sale)
+      .leftJoin(branchTable, eq(branchTable.id, sale.branchId))
+      .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), eq(sale.status, "COMPLETED")))
+      .groupBy(branchTable.id);
+
     const map = new Map(perf.map((p) => [p.id, p]));
     const totalRevenue = round2(perf.reduce((sum, p) => sum + safeParseFloat(p.revenue), 0));
     return {
@@ -141,12 +177,19 @@ export async function getReportBundle(companyId: string, currency: string, type:
     };
   }
 
-  const users = await prisma.user.findMany({ where: { companyId }, include: { branch: true } });
-  const perf = await prisma.$queryRaw<Array<{ id: string | null; orders: bigint | number; revenue: number }>>`
-    SELECT u.id as id, COUNT(s.id) as orders, COALESCE(SUM(s.total), 0) as revenue
-    FROM Sale s LEFT JOIN User u ON u.id = s.userId
-    WHERE s.companyId = ${companyId} AND s.date BETWEEN ${from} AND ${to} AND s.status = 'COMPLETED'
-    GROUP BY u.id`;
+  // employees
+  const users = await db.select().from(userTable).where(eq(userTable.companyId, companyId));
+  const perf = await db
+    .select({
+      id: userTable.id,
+      orders: sql<number>`COUNT(${sale.id})`,
+      revenue: sql<number>`COALESCE(SUM(${sale.total}), 0)`,
+    })
+    .from(sale)
+    .leftJoin(userTable, eq(userTable.id, sale.userId))
+    .where(and(eq(sale.companyId, companyId), gte(sale.date, from), lte(sale.date, to), eq(sale.status, "COMPLETED")))
+    .groupBy(userTable.id);
+
   const map = new Map(perf.map((p) => [p.id, p]));
   const totalRevenue = round2(perf.reduce((sum, p) => sum + safeParseFloat(p.revenue), 0));
   return {
@@ -161,7 +204,7 @@ export async function getReportBundle(companyId: string, currency: string, type:
     formats: ["text", "text", "text", "text", "number", "currency"],
     rows: users.map((u) => {
       const p = map.get(u.id);
-      return [u.name, u.email, u.role, u.branch?.name ?? "", Number(p?.orders ?? 0), Number(p?.revenue ?? 0)];
+      return [u.name, u.email, u.role, "", Number(p?.orders ?? 0), Number(p?.revenue ?? 0)];
     }),
   };
 }

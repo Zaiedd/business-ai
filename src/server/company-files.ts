@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "crypto";
-import { promises as fs } from "fs";
-import path from "path";
-import { prisma } from "@/lib/db";
+import { eq, desc } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { companyFile, user as userTable } from "@/lib/drizzle/schema";
 
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
@@ -16,14 +16,6 @@ export interface CompanyFileRecord {
   uploadedBy: { name: string } | null;
 }
 
-export function uploadRoot(): string {
-  return process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
-}
-
-export function companyDir(companyId: string): string {
-  return path.join(uploadRoot(), companyId);
-}
-
 export function safeOriginalName(name: string): string {
   return name.replace(/[\r\n\u0000-\u001F\u007F]/g, "").trim().slice(0, 255);
 }
@@ -34,23 +26,12 @@ export function buildStoredName(originalName: string): string {
   return `${token}${ext ? `.${ext}` : ""}`;
 }
 
-export function filePathFor(companyId: string, storedName: string): string {
-  return path.join(companyDir(companyId), path.basename(storedName));
+export function fileToBase64(data: Uint8Array): string {
+  return Buffer.from(data).toString("base64");
 }
 
-export async function storeUploadedFile(companyId: string, storedName: string, data: Buffer): Promise<void> {
-  const dir = companyDir(companyId);
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, path.basename(storedName)), data);
-}
-
-export async function deleteStoredFile(companyId: string, storedName: string): Promise<void> {
-  const p = filePathFor(companyId, storedName);
-  try {
-    await fs.unlink(p);
-  } catch {
-    // file already gone — ignore
-  }
+export function base64ToFile(value: string): Buffer {
+  return Buffer.from(value, "base64");
 }
 
 export function formatFileSize(bytes: number, locale = "en"): string {
@@ -65,19 +46,20 @@ export function formatFileSize(bytes: number, locale = "en"): string {
 }
 
 export async function listCompanyFiles(companyId: string): Promise<CompanyFileRecord[]> {
-  const rows = await prisma.companyFile.findMany({
-    where: { companyId },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      originalName: true,
-      mimeType: true,
-      ext: true,
-      size: true,
-      analysis: true,
-      createdAt: true,
-      uploadedBy: { select: { name: true } },
-    },
-  });
+  const rows = await db
+    .select({
+      id: companyFile.id,
+      originalName: companyFile.originalName,
+      mimeType: companyFile.mimeType,
+      ext: companyFile.ext,
+      size: companyFile.size,
+      analysis: companyFile.analysis,
+      createdAt: companyFile.createdAt,
+      uploadedBy: { name: userTable.name },
+    })
+    .from(companyFile)
+    .leftJoin(userTable, eq(companyFile.uploadedById, userTable.id))
+    .where(eq(companyFile.companyId, companyId))
+    .orderBy(desc(companyFile.createdAt));
   return rows;
 }

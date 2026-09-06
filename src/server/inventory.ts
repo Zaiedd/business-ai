@@ -1,4 +1,6 @@
-import { prisma } from "@/lib/db";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { product as productTable } from "@/lib/drizzle/schema";
 import { round2 } from "@/lib/utils";
 
 export type StockStatus = "OK" | "LOW" | "OUT";
@@ -10,10 +12,11 @@ export function stockStatus(p: { stockQty: number; lowStockThreshold: number }):
 }
 
 export async function getInventory(companyId: string) {
-  const products = await prisma.product.findMany({
-    where: { companyId },
-    orderBy: { name: "asc" },
-  });
+  const products = await db
+    .select()
+    .from(productTable)
+    .where(eq(productTable.companyId, companyId))
+    .orderBy(productTable.name);
   return products.map((p) => ({
     ...p,
     status: stockStatus(p),

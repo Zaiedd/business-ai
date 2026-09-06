@@ -1,7 +1,9 @@
 import type { Locale } from "@/lib/i18n";
 import { formatCurrency } from "@/lib/utils";
 import type { DateRange } from "@/lib/validators";
-import { prisma } from "@/lib/db";
+import { eq, desc } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { companyFile } from "@/lib/drizzle/schema";
 import { formatFileSize } from "@/server/company-files";
 import {
   computeHealthScore,
@@ -80,12 +82,17 @@ async function buildSnapshot(companyId: string, range: DateRange, currency: stri
     getStockStatus(companyId),
     getAtRiskCustomers(companyId, 45, 3),
     getCustomerStats(companyId, from, to),
-    prisma.companyFile.findMany({
-      where: { companyId },
-      orderBy: { createdAt: "desc" },
-      take: 3,
-      select: { originalName: true, ext: true, size: true, analysis: true, createdAt: true },
-    }),
+    db.select({
+        originalName: companyFile.originalName,
+        ext: companyFile.ext,
+        size: companyFile.size,
+        analysis: companyFile.analysis,
+        createdAt: companyFile.createdAt,
+      })
+      .from(companyFile)
+      .where(eq(companyFile.companyId, companyId))
+      .orderBy(desc(companyFile.createdAt))
+      .limit(3),
   ]);
 
   const fmt = (v: number) => formatCurrency(v, currency);

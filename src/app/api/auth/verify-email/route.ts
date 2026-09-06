@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { user as userTable } from "@/lib/drizzle/schema";
 import { consumeVerificationToken, writeAudit } from "@/lib/auth";
-import { prisma } from "@/lib/db";
 import { apiOk, apiError, runApi } from "@/lib/api";
 import { getLocaleFromRequest, serverT } from "@/lib/i18n/server";
 
@@ -20,12 +22,12 @@ export async function POST(req: NextRequest) {
     const userId = await consumeVerificationToken(token, "EMAIL_VERIFY");
     if (!userId) return apiError(t("api.verifyLinkInvalid"), 400, "INVALID_TOKEN");
 
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { emailVerifiedAt: new Date() },
-      select: { id: true, companyId: true, emailVerifiedAt: true },
+    const [updated] = await db.update(userTable).set({ emailVerifiedAt: new Date() }).where(eq(userTable.id, userId)).returning({
+      id: userTable.id,
+      companyId: userTable.companyId,
+      emailVerifiedAt: userTable.emailVerifiedAt,
     });
-    await writeAudit({ action: "AUTH.EMAIL_VERIFIED", companyId: user.companyId, userId: user.id, req });
-    return apiOk({ success: true, user });
+    await writeAudit({ action: "AUTH.EMAIL_VERIFIED", companyId: updated.companyId, userId: updated.id, req });
+    return apiOk({ success: true, user: updated });
   }, locale);
 }

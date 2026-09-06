@@ -2,9 +2,10 @@
 
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useI18n } from "@/components/i18n-provider";
+import { stripBidi } from "@/lib/utils";
 
 function ChartTooltip({ active, payload, label, currency }: any) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   if (!active || !payload?.length) return null;
   const nameMap: Record<string, string> = {
     revenue: t("dashboard.charts.revenue"),
@@ -19,7 +20,7 @@ function ChartTooltip({ active, payload, label, currency }: any) {
           <span className="inline-block size-2 rounded-full" style={{ background: p.color ?? p.fill }} />
           <span>{nameMap[p.dataKey] ?? p.name}:</span>
           <span className="font-medium text-slate-900 dark:text-slate-100">
-            {new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(p.value)}
+            {stripBidi(new Intl.NumberFormat(locale === "ar" ? "ar-EG" : "en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(p.value))}
           </span>
         </p>
       ))}
@@ -34,8 +35,8 @@ export function RevenueTrendChart({ data, currency }: { data: Array<{ label: str
       <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="gRev" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25} />
-            <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
+            <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
           </linearGradient>
           <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2} />
@@ -46,7 +47,7 @@ export function RevenueTrendChart({ data, currency }: { data: Array<{ label: str
         <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--chart-tick)" }} tickLine={false} axisLine={{ stroke: "var(--chart-grid)" }} interval="preserveStartEnd" minTickGap={32} />
         <YAxis tick={{ fontSize: 11, fill: "var(--chart-tick)" }} tickLine={false} axisLine={false} width={56} tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v))} />
         <Tooltip content={<ChartTooltip currency={currency} />} />
-        <Area type="monotone" dataKey="revenue" name={t("dashboard.charts.revenue")} stroke="#4f46e5" strokeWidth={2} fill="url(#gRev)" />
+        <Area type="monotone" dataKey="revenue" name={t("dashboard.charts.revenue")} stroke="#2563eb" strokeWidth={2} fill="url(#gRev)" />
         <Area type="monotone" dataKey="expenses" name={t("dashboard.charts.expenses")} stroke="#f43f5e" strokeWidth={2} fill="url(#gExp)" />
         <Area type="monotone" dataKey="profit" name={t("dashboard.charts.netProfit")} stroke="#10b981" strokeWidth={2} fill="transparent" />
       </AreaChart>

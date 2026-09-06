@@ -1,30 +1,36 @@
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
-import { hashPassword, writeAudit } from "@/lib/auth";
+import { eq, and, asc } from "drizzle-orm";
+import { db, cuid } from "@/lib/db";
+import { user as userTable, branch as branchTable } from "@/lib/drizzle/schema";
+import { hashPassword, writeAudit, createVerificationToken } from "@/lib/auth";
 import { apiError, apiOk, handleZod, requireAdmin, requireSession, runApi } from "@/lib/api";
 import { inviteUserSchema } from "@/lib/validators";
 import { canManageUsers } from "@/lib/rbac";
 import { getLocaleFromRequest, serverT } from "@/lib/i18n/server";
+import { sendEmail, inviteUserEmail } from "@/lib/mailer";
 
 export async function GET(req: NextRequest) {
   return runApi(async () => {
     const session = await requireSession(req);
     requireAdmin(session);
-    const users = await prisma.user.findMany({
-      where: { companyId: session.company.id },
-      orderBy: [{ role: "asc" }, { createdAt: "asc" }],
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        status: true,
-        emailVerifiedAt: true,
-        lastLoginAt: true,
-        createdAt: true,
-        branch: { select: { id: true, name: true } },
-      },
-    });
+
+    const users = await db
+      .select({
+        id: userTable.id,
+        email: userTable.email,
+        name: userTable.name,
+        role: userTable.role,
+        status: userTable.status,
+        emailVerifiedAt: userTable.emailVerifiedAt,
+        lastLoginAt: userTable.lastLoginAt,
+        createdAt: userTable.createdAt,
+        branch: { id: branchTable.id, name: branchTable.name },
+      })
+      .from(userTable)
+      .leftJoin(branchTable, eq(userTable.branchId, branchTable.id))
+      .where(eq(userTable.companyId, session.company.id))
+      .orderBy(asc(userTable.role), asc(userTable.createdAt));
+
     return apiOk({ users });
   });
 }
@@ -51,24 +57,23 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const existing = await prisma.user.findUnique({ where: { companyId_email: { companyId: session.company.id, email: normalizedEmail } } });
+    const [existing] = await db.select({ id: userTable.id }).from(userTable).where(and(eq(userTable.companyId, session.company.id), eq(userTable.email, normalizedEmail))).limit(1);
     if (existing) return apiError(t("api.emailTakenCompany"), 409, "EMAIL_TAKEN");
 
     if (branchId) {
-      const branch = await prisma.branch.findFirst({ where: { id: branchId, companyId: session.company.id } });
+      const [branch] = await db.select({ id: branchTable.id }).from(branchTable).where(and(eq(branchTable.id, branchId), eq(branchTable.companyId, session.company.id))).limit(1);
       if (!branch) return apiError(t("api.branchNotFound"), 400);
     }
 
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email: normalizedEmail,
-        role,
-        branchId: branchId ?? null,
-        passwordHash: await hashPassword(password ?? `${name}@${Math.random().toString(36).slice(2, 8)}`),
-        companyId: session.company.id,
-      },
-      select: { id: true, email: true, name: true, role: true },
+    const userId = cuid();
+    await db.insert(userTable).values({
+      id: userId,
+      name,
+      email: normalizedEmail,
+      role,
+      branchId: branchId ?? null,
+      passwordHash: await hashPassword(password ?? `${name}@${Math.random().toString(36).slice(2, 8)}`),
+      companyId: session.company.id,
     });
 
     await writeAudit({
@@ -76,11 +81,15 @@ export async function POST(req: NextRequest) {
       companyId: session.company.id,
       userId: session.user.id,
       entity: "User",
-      entityId: user.id,
-      metadata: { invitedEmail: user.email, role },
+      entityId: userId,
+      metadata: { invitedEmail: normalizedEmail, role },
       req,
     });
 
-    return apiOk({ user }, { status: 201 });
+    const resetToken = await createVerificationToken(userId, "PASSWORD_RESET");
+    const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://business-ai.zaiedd.workers.dev";
+    await sendEmail(inviteUserEmail(normalizedEmail, `${origin}/reset-password?token=${resetToken}`, session.company.name, locale));
+
+    return apiOk({ user: { id: userId, email: normalizedEmail, name, role } }, { status: 201 });
   }, locale);
 }

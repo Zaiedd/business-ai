@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/components/i18n-provider";
+import { useToast } from "@/components/ui/toast";
 
 interface Product {
   id: string;
@@ -26,7 +27,8 @@ interface Product {
 const emptyForm = { name: "", sku: "", category: "", costPrice: "", sellingPrice: "", stockQty: "", lowStockThreshold: "10" };
 
 export default function InventoryPage() {
-  const { t } = useI18n();
+  const { toast } = useToast();
+  const { t, locale } = useI18n();
   const [products, setProducts] = useState<Product[]>([]);
   const [currency, setCurrency] = useState("USD");
   const [loading, setLoading] = useState(true);
@@ -127,7 +129,7 @@ export default function InventoryPage() {
     const res = await fetch(`/api/inventory?id=${p.id}`, { method: "DELETE" });
     const body = await res.json();
     if (!res.ok) {
-      alert(body.error ?? t("inventory.deleteFailed"));
+      toast(body.error ?? t("inventory.deleteFailed"), "error");
       return;
     }
     load();
@@ -191,7 +193,7 @@ export default function InventoryPage() {
       <Card>
         <CardHeader
           title={t("inventory.title")}
-          subtitle={filtered.length === 1 ? t("inventory.title") : t("inventory.title")}
+          subtitle={filtered.length === 1 ? t("inventory.productCount", { count: String(filtered.length) }) : t("inventory.productsCount", { count: String(filtered.length) })}
         />
         <CardBody className="-mx-5 overflow-x-auto px-5">
           <div className="relative mb-3 max-w-sm">
@@ -209,30 +211,30 @@ export default function InventoryPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
-                  <th className="py-2 pr-4 font-semibold">{t("inventory.product")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("inventory.category")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("inventory.costPrice")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("inventory.sellingPrice")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("inventory.margin")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("inventory.stock")}</th>
-                  <th className="py-2 pr-4 font-semibold">{t("inventory.stockStatus")}</th>
+                <tr className="border-b border-slate-100 text-start text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                  <th className="py-2 pe-4 font-semibold">{t("inventory.product")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("inventory.category")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("inventory.costPrice")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("inventory.sellingPrice")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("inventory.margin")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("inventory.stock")}</th>
+                  <th className="py-2 pe-4 font-semibold">{t("inventory.stockStatus")}</th>
                   <th className="py-2 text-end font-semibold">{t("inventory.actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
                 {filtered.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pe-4">
                       <div className="font-medium text-slate-900 dark:text-slate-100">{p.name}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400">{p.sku}</div>
                     </td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-400">{p.category ?? "—"}</td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-400">{formatCurrency(p.costPrice, currency)}</td>
-                    <td className="py-3 pr-4 font-medium text-slate-900 dark:text-slate-100">{formatCurrency(p.sellingPrice, currency)}</td>
-                    <td className="py-3 pr-4 text-emerald-600 dark:text-emerald-400">{formatCurrency(p.margin, currency)}</td>
-                    <td className="py-3 pr-4 text-slate-600 dark:text-slate-400">{formatNumber(p.stockQty)}</td>
-                    <td className="py-3 pr-4">{stockBadge(p)}</td>
+                    <td className="py-3 pe-4 text-slate-600 dark:text-slate-400">{p.category ?? "—"}</td>
+                    <td className="py-3 pe-4 text-slate-600 dark:text-slate-400">{formatCurrency(p.costPrice, currency, false, locale)}</td>
+                    <td className="py-3 pe-4 font-medium text-slate-900 dark:text-slate-100">{formatCurrency(p.sellingPrice, currency, false, locale)}</td>
+                    <td className="py-3 pe-4 text-emerald-600 dark:text-emerald-400">{formatCurrency(p.margin, currency, false, locale)}</td>
+                    <td className="py-3 pe-4 text-slate-600 dark:text-slate-400">{formatNumber(p.stockQty, 0, locale)}</td>
+                    <td className="py-3 pe-4">{stockBadge(p)}</td>
                     <td className="py-3 text-end">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openEdit(p)} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/50" title={t("common.edit")}>

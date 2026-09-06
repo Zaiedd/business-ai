@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import { AlertCircle, ShieldCheck } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -23,13 +24,20 @@ export default function ActivityPage() {
   const { t, locale } = useI18n();
   const [logs, setLogs] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setError(null);
     fetch("/api/audit", { cache: "no-store" })
       .then((r) => r.json())
       .then((b) => setLogs(b.data?.logs ?? []))
-      .catch(() => setLogs([]))
+      .catch(() => setError(t("activity.loadFailed")))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
   }, []);
 
   function actionLabel(action: string): string {
@@ -44,6 +52,20 @@ export default function ActivityPage() {
         <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{t("activity.title")}</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">{t("activity.subtitle")}</p>
       </div>
+
+      {error && (
+        <Card className="border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/40">
+          <CardBody className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-rose-700 dark:text-rose-300">
+              <AlertCircle className="size-4" />
+              {error}
+            </div>
+            <Button variant="danger" size="sm" onClick={load}>
+              {t("common.retry")}
+            </Button>
+          </CardBody>
+        </Card>
+      )}
 
       <Card>
         <CardHeader title={t("activity.cardTitle")} subtitle={t("activity.cardSubtitle")} actions={<Badge variant="info"><ShieldCheck className="size-3" />{t("activity.audited")}</Badge>} />

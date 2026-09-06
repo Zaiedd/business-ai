@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { user as userTable } from "@/lib/drizzle/schema";
 import { verifyPassword, issueSession, setSessionCookie, writeAudit, getRequestMeta } from "@/lib/auth";
 import { apiOk, apiError, handleZod, runApi } from "@/lib/api";
 import { loginSchema } from "@/lib/validators";
@@ -25,39 +27,49 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) return handleZod(parsed.error, locale);
     const { email, password } = parsed.data;
 
-    const user = await prisma.user.findFirst({ where: { email: email.toLowerCase().trim() }, include: { company: true } });
-    if (!user || !user.passwordHash) {
-      await new Promise((r) => setTimeout(r, 350)); // mitigate user enumeration timing
+    let userRow;
+    try {
+      const [found] = await db.select().from(userTable).where(eq(userTable.email, email.toLowerCase().trim())).limit(1);
+      userRow = found;
+    } catch (dbErr: any) {
+      return apiError(`DB_ERROR: ${dbErr?.message ?? String(dbErr)} | cause: ${dbErr?.cause?.message ?? "none"}`, 500, "DB_ERROR");
+    }
+    if (!userRow || !userRow.passwordHash) {
+      await new Promise((r) => setTimeout(r, 350));
       return apiError(t("api.invalidCredentials"), 401, "INVALID_CREDENTIALS");
     }
 
-    const ok = await verifyPassword(password, user.passwordHash);
+    const ok = await verifyPassword(password, userRow.passwordHash);
     if (!ok) return apiError(t("api.invalidCredentials"), 401, "INVALID_CREDENTIALS");
 
-    if (user.status !== "ACTIVE") {
+    if (userRow.status !== "ACTIVE") {
       return apiError(t("api.accountDisabled"), 403, "ACCOUNT_DISABLED");
     }
 
-    const token = await issueSession({ id: user.id, role: user.role, companyId: user.companyId }, req);
-    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    // Fetch company info
+    const { company: companyTable } = await import("@/lib/drizzle/schema");
+    const [company] = await db.select().from(companyTable).where(eq(companyTable.id, userRow.companyId)).limit(1);
+
+    const token = await issueSession({ id: userRow.id, role: userRow.role, companyId: userRow.companyId }, req);
+    await db.update(userTable).set({ lastLoginAt: new Date() }).where(eq(userTable.id, userRow.id));
 
     const response = apiOk({
       user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        company: { id: user.company.id, name: user.company.name, slug: user.company.slug, currency: user.company.currency },
+        id: userRow.id,
+        name: userRow.name,
+        email: userRow.email,
+        role: userRow.role,
+        company: company ? { id: company.id, name: company.name, slug: company.slug, currency: company.currency } : null,
       },
     });
     setSessionCookie(response, token, req);
 
     await writeAudit({
       action: "AUTH.LOGIN",
-      companyId: user.companyId,
-      userId: user.id,
+      companyId: userRow.companyId,
+      userId: userRow.id,
       entity: "User",
-      entityId: user.id,
+      entityId: userRow.id,
       req,
     });
 

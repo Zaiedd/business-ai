@@ -6,16 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardBody } from "@/components/ui/card";
 import { useI18n } from "@/components/i18n-provider";
-
-const DEMO_ACCOUNTS = [
-  { labelKey: "roles.OWNER", email: "owner@acme.test" },
-  { labelKey: "roles.ADMIN", email: "admin@acme.test" },
-  { labelKey: "roles.MANAGER", email: "manager@acme.test" },
-  { labelKey: "roles.ACCOUNTANT", email: "accountant@acme.test" },
-  { labelKey: "roles.EMPLOYEE", email: "employee1@acme.test" },
-];
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -84,28 +75,6 @@ function LoginForm() {
           {t("auth.login.createAccount")}
         </Link>
       </p>
-
-      <Card className="mt-6 border-slate-200 dark:border-slate-700">
-        <CardBody className="space-y-2 px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{t("auth.login.demoHint")}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {DEMO_ACCOUNTS.map((a) => (
-              <button
-                key={a.email}
-                type="button"
-                onClick={() => {
-                  setEmail(a.email);
-                  setPassword("Password123!");
-                  setError(null);
-                }}
-                className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-950"
-              >
-                {t(a.labelKey)}
-              </button>
-            ))}
-          </div>
-        </CardBody>
-      </Card>
     </>
   );
 }
