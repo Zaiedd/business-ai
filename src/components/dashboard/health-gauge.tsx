@@ -1,7 +1,8 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { Gauge } from "@/components/charts/gauge";
 import { useI18n } from "@/components/i18n-provider";
+import { cn } from "@/lib/utils";
 
 export function HealthGauge({ score, label, subtitles }: { score: number; label?: string; subtitles?: string[] }) {
   const { t } = useI18n();
@@ -30,40 +31,20 @@ export function HealthGauge({ score, label, subtitles }: { score: number; label?
     ">=50": "bg-amber-50 dark:bg-amber-500/15",
     else: "bg-rose-50 dark:bg-rose-500/15",
   };
+
   const c = {
     stroke: strokeColors[bucket],
     text: textClasses[bucket],
     bg: bgClasses[bucket],
     label: bucketLabels[bucket],
   };
-  const R = 52;
-  const C = 2 * Math.PI * R;
-  const pct = Math.max(0, Math.min(100, score)) / 100;
 
   return (
     <div className="flex flex-col items-center py-2">
-      <div className="relative size-36">
-        <svg viewBox="0 0 120 120" className="size-full -rotate-90">
-          <circle cx="60" cy="60" r={R} fill="none" stroke="var(--chart-grid)" strokeWidth="10" />
-          <circle
-            cx="60"
-            cy="60"
-            r={R}
-            fill="none"
-            stroke={c.stroke}
-            strokeWidth="10"
-            strokeLinecap="round"
-            strokeDasharray={C}
-            strokeDashoffset={C * (1 - pct)}
-            className="transition-all duration-700 ease-out"
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-bold text-slate-900 dark:text-slate-100">{score}</span>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">/ 100</span>
-        </div>
+      <div className="w-full max-w-[210px]">
+        <Gauge value={score} centerValue={score} activeFill={c.stroke} defaultLabel="" minWidth={120} />
       </div>
-      <span className={cn("mt-2 rounded-full px-3 py-1 text-xs font-semibold", c.bg, c.text)}>{label ?? c.label}</span>
+      <span className={cn("mt-1 rounded-full px-3 py-1 text-xs font-semibold", c.bg, c.text)}>{label ?? c.label}</span>
       {subtitles?.map((s) => (
         <span key={s} className="mt-1 text-xs text-slate-500 dark:text-slate-400">
           {s}

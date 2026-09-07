@@ -84,15 +84,156 @@ html.theme-transition *::after {
   background: transparent;
 }
 
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-background: var(--chart-background);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-crosshair: var(--chart-crosshair);
+  --color-chart-label: var(--chart-label);
+  --color-chart-foreground: var(--chart-foreground);
+  --color-chart-foreground-muted: var(--chart-foreground-muted);
+  --color-chart-indicator-color: var(--chart-indicator-color);
+  --color-chart-indicator-secondary-color: var(--chart-indicator-secondary-color);
+  --color-chart-line-primary: var(--chart-line-primary);
+  --color-chart-line-secondary: var(--chart-line-secondary);
+  --color-chart-marker-background: var(--chart-marker-background);
+  --color-chart-marker-foreground: var(--chart-marker-foreground);
+  --color-chart-marker-border: var(--chart-marker-border);
+  --color-chart-marker-badge-background: var(--chart-marker-badge-background);
+  --color-chart-marker-badge-foreground: var(--chart-marker-badge-foreground);
+  --color-chart-tooltip-background: var(--chart-tooltip-background);
+  --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
+  --color-chart-tooltip-muted: var(--chart-tooltip-muted);
+  --color-chart-segment-background: var(--chart-segment-background);
+  --color-chart-segment-line: var(--chart-segment-line);
+  --color-chart-brush-border: var(--chart-brush-border);
+}
+
 /* Recharts: force crisp text in dark mode */
 :root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #2f5ce0;
+  --primary-foreground: #ffffff;
+  --secondary: #eef2ff;
+  --secondary-foreground: #1e293b;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #eef2ff;
+  --accent-foreground: #1e293b;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #2f5ce0;
+
+  --chart-1: #2f5ce0;
+  --chart-2: #38bdf8;
+  --chart-3: #8fabff;
+  --chart-4: #1c3d99;
+  --chart-5: #2f62ee;
+  --chart-background: #ffffff;
   --chart-grid: #e2e8f0;
+  --chart-crosshair: #94a3b8;
+  --chart-label: #64748b;
+  --chart-foreground: #0f172a;
+  --chart-foreground-muted: #64748b;
+  --chart-indicator-color: #2f5ce0;
+  --chart-indicator-secondary-color: #94a3b8;
+  --chart-line-primary: #2f5ce0;
+  --chart-line-secondary: #94a3b8;
+  --chart-marker-background: #ffffff;
+  --chart-marker-foreground: #0f172a;
+  --chart-marker-border: #e2e8f0;
+  --chart-marker-badge-background: #0f172a;
+  --chart-marker-badge-foreground: #ffffff;
+  --chart-tooltip-background: #ffffff;
+  --chart-tooltip-foreground: #0f172a;
+  --chart-tooltip-muted: #64748b;
+  --chart-segment-background: #e2e8f0;
+  --chart-segment-line: #cbd5e1;
+  --chart-brush-border: #cbd5e1;
+
   --chart-tick: #64748b;
   --chart-tick-strong: #475569;
   --color-tooltip-bg: #ffffff;
 }
 .dark {
-  --chart-grid: #334155;
+  --background: #0b1736;
+  --foreground: #eef4ff;
+  --card: #0f1f4f;
+  --card-foreground: #eef4ff;
+  --popover: #0f1f4f;
+  --popover-foreground: #eef4ff;
+  --primary: #5f8bfc;
+  --primary-foreground: #ffffff;
+  --secondary: #17318c;
+  --secondary-foreground: #dbe6ff;
+  --muted: #16327f;
+  --muted-foreground: #94b3ff;
+  --accent: #1e40af;
+  --accent-foreground: #dbe6ff;
+  --destructive: #f87171;
+  --destructive-foreground: #ffffff;
+  --border: #1e3a8a;
+  --input: #1e3a8a;
+  --ring: #5f8bfc;
+
+  --chart-1: #5f8bfc;
+  --chart-2: #38bdf8;
+  --chart-3: #8fabff;
+  --chart-4: #94b3ff;
+  --chart-5: #2f62ee;
+  --chart-background: #0b1736;
+  --chart-grid: #1e3a8a;
+  --chart-crosshair: #94b3ff;
+  --chart-label: #94b3ff;
+  --chart-foreground: #eef4ff;
+  --chart-foreground-muted: #94b3ff;
+  --chart-indicator-color: #5f8bfc;
+  --chart-indicator-secondary-color: #94b3ff;
+  --chart-line-primary: #5f8bfc;
+  --chart-line-secondary: #94b3ff;
+  --chart-marker-background: #0f1f4f;
+  --chart-marker-foreground: #eef4ff;
+  --chart-marker-border: #1e3a8a;
+  --chart-marker-badge-background: #5f8bfc;
+  --chart-marker-badge-foreground: #ffffff;
+  --chart-tooltip-background: #0f1f4f;
+  --chart-tooltip-foreground: #eef4ff;
+  --chart-tooltip-muted: #94b3ff;
+  --chart-segment-background: #1e3a8a;
+  --chart-segment-line: #2a3fb0;
+  --chart-brush-border: #3b4fb0;
+
   --chart-tick: #94a3b8;
   --chart-tick-strong: #cbd5e1;
   --color-tooltip-bg: #0f172a;

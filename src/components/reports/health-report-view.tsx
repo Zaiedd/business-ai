@@ -5,6 +5,11 @@ import { cn } from "@/lib/utils";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { HealthGauge } from "@/components/dashboard/health-gauge";
+import RadarChart from "@/components/charts/radar-chart";
+import RadarGrid from "@/components/charts/radar-grid";
+import RadarAxis from "@/components/charts/radar-axis";
+import RadarArea from "@/components/charts/radar-area";
+import RadarLabels from "@/components/charts/radar-labels";
 import { useI18n } from "@/components/i18n-provider";
 import type { HealthReportBundle } from "@/server/health";
 
@@ -93,31 +98,55 @@ export function HealthReportView({ data }: { data: HealthReportViewData }) {
       </Card>
 
       {/* Areas */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {data.areas.map((a) => (
-          <Card key={a.key}>
-            <CardBody className="space-y-3 px-4 py-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{a.label}</p>
-                <span className="text-xl font-bold text-slate-900 dark:text-slate-100">{a.score}</span>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                <div className={cn("h-full rounded-full", areaColor(a.score))} style={{ width: `${a.score}%` }} />
-              </div>
-              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">{a.summary}</p>
-              <ul className="space-y-1.5">
-                {a.signals.map((s) => (
-                  <li key={s.key} className="flex items-center justify-between gap-2 text-xs">
-                    <span className="flex min-w-0 items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                      {sigIcon(s.status)} <span className="truncate">{s.label}</span>
-                    </span>
-                    <span className={cn("shrink-0 font-semibold", s.status === "good" ? "text-emerald-600 dark:text-emerald-400" : s.status === "bad" ? "text-rose-600 dark:text-rose-400" : "text-slate-600 dark:text-slate-300")}>{s.value}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardBody>
-          </Card>
-        ))}
+      <div className="grid gap-4 lg:grid-cols-3 xl:grid-cols-6">
+        <Card className="lg:col-span-1 xl:col-span-2">
+          <CardHeader title={t("health.radarLabel")} subtitle={t("health.radarSubtitle")} />
+          <CardBody>
+            <div className="mx-auto aspect-square max-w-[380px]">
+              <RadarChart
+                data={[
+                  {
+                    label: t("health.headlineLabel"),
+                    color: "var(--chart-1)",
+                    values: Object.fromEntries(data.areas.map((a) => [a.key, a.score])),
+                  },
+                ]}
+                metrics={data.areas.map((a) => ({ key: a.key, label: a.label }))}
+              >
+                <RadarGrid />
+                <RadarAxis />
+                <RadarArea index={0} />
+                <RadarLabels />
+              </RadarChart>
+            </div>
+          </CardBody>
+        </Card>
+        <div className="grid gap-4 md:grid-cols-2 lg:col-span-2 xl:col-span-4">
+          {data.areas.map((a) => (
+            <Card key={a.key}>
+              <CardBody className="space-y-3 px-4 py-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{a.label}</p>
+                  <span className="text-xl font-bold text-slate-900 dark:text-slate-100">{a.score}</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div className={cn("h-full rounded-full", areaColor(a.score))} style={{ width: `${a.score}%` }} />
+                </div>
+                <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">{a.summary}</p>
+                <ul className="space-y-1.5">
+                  {a.signals.map((s) => (
+                    <li key={s.key} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="flex min-w-0 items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                        {sigIcon(s.status)} <span className="truncate">{s.label}</span>
+                      </span>
+                      <span className={cn("shrink-0 font-semibold", s.status === "good" ? "text-emerald-600 dark:text-emerald-400" : s.status === "bad" ? "text-rose-600 dark:text-rose-400" : "text-slate-600 dark:text-slate-300")}>{s.value}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardBody>
+            </Card>
+          ))}
+        </div>
       </div>
 
       {/* KPIs + summary */}

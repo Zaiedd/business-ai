@@ -481,6 +481,8 @@ export const ar = {
     period: "الفترة",
     customDays: "عدد الأيام",
     headlineLabel: "الصحة العامة",
+    radarLabel: "ملف المجالات",
+    radarSubtitle: "درجة الصحة لكل مجال عمل",
     prevLabel: "الفترة السابقة",
     changeUp: "+{pct} نقطة مقارنة بالفترة السابقة",
     changeDown: "{pct} نقطة مقارنة بالفترة السابقة",

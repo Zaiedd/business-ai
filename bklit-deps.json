@@ -1,0 +1,36 @@
+{
+  "charts": [
+    "area-chart",
+    "bar-chart",
+    "chart-animation",
+    "chart-context",
+    "chart-series",
+    "chart-tooltip",
+    "chart-utils",
+    "gauge-chart",
+    "grid",
+    "radar-chart",
+    "ring-chart",
+    "shimmering-text",
+    "utils",
+    "x-axis"
+  ],
+  "files": 92,
+  "deps": [
+    "@number-flow/react",
+    "@visx/curve",
+    "@visx/event",
+    "@visx/gradient",
+    "@visx/grid",
+    "@visx/group",
+    "@visx/pattern",
+    "@visx/responsive",
+    "@visx/scale",
+    "@visx/shape",
+    "clsx",
+    "d3-array",
+    "d3-shape",
+    "motion",
+    "tailwind-merge"
+  ]
+}

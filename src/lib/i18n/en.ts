@@ -481,6 +481,8 @@ export const en = {
     period: "Period",
     customDays: "Days",
     headlineLabel: "Overall health",
+    radarLabel: "Area profile",
+    radarSubtitle: "Health score per business area",
     prevLabel: "Previous period",
     changeUp: "+{pct} pts vs previous period",
     changeDown: "{pct} pts vs previous period",
